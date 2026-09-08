@@ -1,0 +1,7 @@
+// Lexical-error demo: '@' and '$' match no token pattern.  The scanner's
+// catch-all rule reports each one with its exact line:column and keeps going.
+scalar int n;
+kernel k() {
+    n = n @ 1;
+    n = n $ 2;
+}
