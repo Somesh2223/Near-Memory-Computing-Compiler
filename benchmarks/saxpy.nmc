@@ -1,0 +1,22 @@
+array float A[1024];
+array float B[1024];
+array float C[1024];
+scalar float alpha;
+
+kernel saxpy() {
+    for (i = 0; i < 1024; i += 1) {
+        C[i] = alpha * A[i] + B[i];
+    }
+}
+
+host main() {
+    for (i = 0; i < 1024; i += 1) {
+        A[i] = i * 0.5;
+    }
+    call saxpy();
+    if (alpha > 0.0) {
+        print C[0];
+    } else {
+        print C[1];
+    }
+}

@@ -1,0 +1,21 @@
+/* Deliberately malformed NEMO-C.  Exercises the parser's error productions:
+ * two independent syntax errors, each reported with file:line:column, each
+ * recovered from at the next ';' so the parse continues to the end of file
+ * instead of aborting on the first mistake. */
+
+array float A[1024];
+array float B[1024];
+array float C[1024];
+scalar float alpha;
+
+kernel saxpy() {
+    for (i = 0; i < 1024; i += 1) {
+        C[i] = alpha * * A[i] + B[i];
+    }
+    C[0] = ;
+}
+
+host main() {
+    call saxpy();
+    print C[0];
+}
