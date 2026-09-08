@@ -53,11 +53,20 @@ $(BUILD):
 
 # ---- Phase A demo ------------------------------------------------------
 demo: $(BIN)
-	@echo "==================== benchmarks/saxpy.nmc  (valid) ===================="
+	@echo "============ lexer: token stream of benchmarks/saxpy.nmc ============"
+	./$(BIN) benchmarks/saxpy.nmc --dump tokens
+	@echo
+	@echo "============ lexer: invalid characters (tests/bad_token.nmc) ========"
+	-./$(BIN) tests/bad_token.nmc --dump tokens
+	@echo
+	@echo "============ parser: AST of benchmarks/saxpy.nmc (valid) ============"
 	./$(BIN) benchmarks/saxpy.nmc
 	@echo
-	@echo "==================== tests/bad_syntax.nmc  (malformed) ================"
+	@echo "============ parser: error recovery (tests/bad_syntax.nmc) =========="
 	-./$(BIN) tests/bad_syntax.nmc
+	@echo
+	@echo "============ bison: grammar is conflict-free ========================"
+	@grep -qiE 'conflict' $(BUILD)/parser.output && grep -iE 'conflict' $(BUILD)/parser.output || echo "0 shift/reduce and 0 reduce/reduce conflicts (see build/parser.output)"
 
 clean:
 	rm -rf $(BUILD) $(BIN)
