@@ -15,8 +15,8 @@ target.
 
 | Phase | Contents | State |
 |-------|----------|-------|
-| **A** | lexer, LALR parser, AST, symbol table, semantic analysis | parser + AST done; symtab/semantic next |
-| B | IR (loop-nest-preserving), CFG | — |
+| **A** | lexer, LALR parser, AST, symbol table, semantic analysis | **done** |
+| B | IR (loop-nest-preserving), CFG | next |
 | C | const-fold/prop, CSE, DCE, strength reduction, induction vars | — |
 | D | affine access matrices, GCD + Banerjee dependence tests, direction vectors | — |
 | E | offload profitability cost model (the headline pass) | — |
@@ -40,9 +40,13 @@ make clean
 ## Run
 
 ```bash
-./nemoc benchmarks/saxpy.nmc        # prints the AST
-./nemoc path/to/file.nmc --dump ast
+./nemoc file.nmc                 # lex + parse + semantic checks, then print the AST
+./nemoc file.nmc --dump tokens   # stop after the lexer, print the token stream
+./nemoc file.nmc --dump ast      # lex + parse only, print the AST (no semantic pass)
+./nemoc file.nmc --check         # lex + parse + semantic checks, report pass/fail only
 ```
+
+Exit status is non-zero if any lexical, syntax, or semantic error is found.
 
 ## Layout
 
@@ -54,7 +58,7 @@ tests/       malformed inputs and (later) per-pass unit tests
 docs/        analysis write-ups and Graphviz output
 ```
 
-## Front end (Phase A so far)
+## Front end (Phase A — complete)
 
 - **`src/lexer.l`** — flex scanner. Maximal-munch tokenisation with keyword-
   before-identifier rule ordering; exact line/column tracking via
@@ -67,5 +71,16 @@ docs/        analysis write-ups and Graphviz output
   resolved with `%left`/`%nonassoc` declarations. `stmt: error ';'` gives
   panic-mode recovery so multiple syntax errors are reported in one run.
 - **`src/ast.{h,cpp}`** — the AST as tagged structs (`Kind` enum + superset of
-  fields), no class hierarchy. `ast.cpp` also has the recursive pretty-printer
-  used by `--dump ast`.
+  fields), no class hierarchy. `ast.cpp` also has the recursive pretty-printer.
+- **`src/symtab.{h,cpp}`** — block-structured symbol table: a stack of scopes,
+  most-closely-nested-scope lookup. Global scope holds arrays / scalars /
+  kernels / host blocks; each `for` opens a nested scope holding just its index
+  variable, so the index is undefined outside the loop.
+- **`src/semantic.cpp`** — syntax-directed AST walk doing name resolution and
+  bottom-up type synthesis. Two passes (collect top-level names, then check
+  bodies). Checks: undeclared identifiers; int/float type rules with int→float
+  promotion and no implicit narrowing; array subscript count vs declaration;
+  integer-only subscripts; constant loop bounds; consistent `for`-header index
+  variable, positive step, `<`/`<=` test; loop index not reassigned or shadowed;
+  `call`/`print` only in host code; redeclarations. All errors are collected in
+  one run with `file:line:col` positions.
