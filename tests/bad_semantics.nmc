@@ -1,0 +1,29 @@
+// Semantic-error demo.  Lexing and parsing both succeed; every flagged line
+// below breaks a context-sensitive rule that semantic.cpp enforces.  All
+// errors are reported in a single run.
+
+array float A[1024];
+array int   B[8, 8];
+scalar float alpha;
+scalar int   n;
+
+kernel bad() {
+    for (i = 0; i < alpha; i += 1) {   // upper bound is not a constant integer
+        A[i] = D[i];                    // undeclared identifier 'D'
+        B[i] = n;                       // B has 2 dimensions, used with 1 subscript
+        i = 5;                          // loop index 'i' reassigned in the body
+        n = alpha;                      // float value assigned to integer 'n'
+        A[i] = i * 0.5;                 // OK: float array, float RHS
+    }
+    print A[0];                         // 'print' is host-only
+}
+
+host main() {
+    call bad();                         // OK: 'bad' is a kernel
+    call missing();                     // call to undeclared kernel 'missing'
+    for (k = 0; k < 8; m += 1) {        // header names two different variables
+        A[k] = k;                       // OK
+    }
+    A[n] = alpha;                       // OK
+    x = 1;                              // assignment to undeclared identifier 'x'
+}

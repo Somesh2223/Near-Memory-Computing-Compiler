@@ -3,15 +3,17 @@
  *
  * Phase A scope: open a .nmc file and run the front end.
  *   --dump tokens   stop after lexical analysis, print the token stream
- *   --dump ast      run the parser, print the AST (default)
- * Later phases hang symbol-table construction, semantic analysis, IR lowering,
- * the optimiser and the near-memory passes off the same Program* the parser
- * produces here.
+ *   --dump ast      lex + parse, print the AST, skip semantic analysis
+ *   --check         lex + parse + semantic analysis, report pass/fail only
+ *   (no flag)       all of the above, then print the AST
+ * Later phases hang IR lowering, the optimiser and the near-memory passes off
+ * the same Program* the parser produces here.
  * ==========================================================================*/
 #include <cstdio>
 #include <cstring>
 
 #include "ast.h"
+#include "semantic.h"
 #include "parser.tab.h"        /* token codes, YYSTYPE yylval, YYLTYPE yylloc */
 
 /* provided by the generated scanner / parser */
@@ -25,7 +27,7 @@ extern Program    *g_program;
 static void usage(const char *prog)
 {
 	fprintf(stderr,
-	        "usage: %s <file.nmc> [--dump tokens|ast]\n"
+	        "usage: %s <file.nmc> [--dump tokens|ast | --check]\n"
 	        "  runs the NEMO-C front end on a source file\n", prog);
 }
 
@@ -92,12 +94,14 @@ static int dump_tokens(void)
 int main(int argc, char **argv)
 {
 	const char *path = 0;
-	const char *dump = "ast";
+	const char *mode = "full";        /* full | tokens | ast | check */
 	int i;
 
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--dump") == 0 && i + 1 < argc) {
-			dump = argv[++i];
+			mode = argv[++i];
+		} else if (strcmp(argv[i], "--check") == 0) {
+			mode = "check";
 		} else if (strcmp(argv[i], "-h") == 0 ||
 		           strcmp(argv[i], "--help") == 0) {
 			usage(argv[0]);
@@ -114,7 +118,8 @@ int main(int argc, char **argv)
 		usage(argv[0]);
 		return 2;
 	}
-	if (strcmp(dump, "tokens") != 0 && strcmp(dump, "ast") != 0) {
+	if (strcmp(mode, "full") != 0 && strcmp(mode, "tokens") != 0 &&
+	    strcmp(mode, "ast") != 0 && strcmp(mode, "check") != 0) {
 		fprintf(stderr, "%s: --dump expects 'tokens' or 'ast'\n", argv[0]);
 		return 2;
 	}
@@ -126,7 +131,7 @@ int main(int argc, char **argv)
 	}
 	g_srcfile = path;
 
-	if (strcmp(dump, "tokens") == 0) {
+	if (strcmp(mode, "tokens") == 0) {
 		printf("nemoc: lexical analysis of %s\n\n", path);
 		int rc = dump_tokens();
 		fclose(yyin);
@@ -145,7 +150,25 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	printf("nemoc: parsed %s successfully.\n\n", path);
-	ast_print_program(g_program);
+	/* --dump ast: syntax view only, semantic analysis skipped */
+	if (strcmp(mode, "ast") == 0) {
+		printf("nemoc: parsed %s successfully.\n\n", path);
+		ast_print_program(g_program);
+		return 0;
+	}
+
+	/* --check and default: run semantic analysis */
+	int se = semantic_check(g_program);
+	if (se > 0) {
+		fprintf(stderr, "\nnemoc: %d semantic error%s in %s.\n",
+		        se, se == 1 ? "" : "s", path);
+		return 1;
+	}
+
+	printf("nemoc: %s passed lexing, parsing and semantic analysis.\n", path);
+	if (strcmp(mode, "check") != 0) {
+		printf("\n");
+		ast_print_program(g_program);
+	}
 	return 0;
 }

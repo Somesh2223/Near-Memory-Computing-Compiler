@@ -18,7 +18,7 @@ BUILD := build
 BIN   := nemoc
 
 GEN_OBJ  := $(BUILD)/parser.tab.o $(BUILD)/lex.yy.o
-HAND_OBJ := $(BUILD)/ast.o $(BUILD)/main.o
+HAND_OBJ := $(BUILD)/ast.o $(BUILD)/symtab.o $(BUILD)/semantic.o $(BUILD)/main.o
 
 .PHONY: all clean demo
 all: $(BIN)
@@ -45,7 +45,13 @@ $(BUILD)/lex.yy.o: $(BUILD)/lex.yy.c $(BUILD)/parser.tab.h $(SRC)/ast.h
 $(BUILD)/ast.o: $(SRC)/ast.cpp $(SRC)/ast.h | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
 
-$(BUILD)/main.o: $(SRC)/main.cpp $(SRC)/ast.h $(BUILD)/parser.tab.h | $(BUILD)
+$(BUILD)/symtab.o: $(SRC)/symtab.cpp $(SRC)/symtab.h $(SRC)/ast.h | $(BUILD)
+	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
+
+$(BUILD)/semantic.o: $(SRC)/semantic.cpp $(SRC)/semantic.h $(SRC)/symtab.h $(SRC)/ast.h | $(BUILD)
+	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
+
+$(BUILD)/main.o: $(SRC)/main.cpp $(SRC)/ast.h $(SRC)/semantic.h $(BUILD)/parser.tab.h | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(SRC) -I$(BUILD) -c -o $@ $<
 
 $(BUILD):
@@ -63,7 +69,13 @@ demo: $(BIN)
 	./$(BIN) benchmarks/saxpy.nmc
 	@echo
 	@echo "============ parser: error recovery (tests/bad_syntax.nmc) =========="
-	-./$(BIN) tests/bad_syntax.nmc
+	-./$(BIN) tests/bad_syntax.nmc --dump ast
+	@echo
+	@echo "============ semantic analysis: valid program ======================="
+	./$(BIN) benchmarks/saxpy.nmc --check
+	@echo
+	@echo "============ semantic analysis: broken program ======================"
+	-./$(BIN) tests/bad_semantics.nmc --check
 	@echo
 	@echo "============ bison: grammar is conflict-free ========================"
 	@grep -qiE 'conflict' $(BUILD)/parser.output && grep -iE 'conflict' $(BUILD)/parser.output || echo "0 shift/reduce and 0 reduce/reduce conflicts (see build/parser.output)"
