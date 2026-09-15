@@ -1,9 +1,10 @@
 # ============================================================================
 # NEMO-C  --  near-memory-aware compiler.  Plain GNU Makefile (no CMake).
 #
-# Phase A target: `nemoc`, a front end that scans + parses a .nmc file and
-# prints its AST.  Generated scanner/parser go under build/; hand-written
-# C++17 sources live in src/.
+# `nemoc`: front end (lex, parse, semantic analysis) plus, as of Phase B, IR
+# lowering and CFG construction.  Generated scanner/parser go under build/;
+# hand-written C++17 sources live in src/; CFG Graphviz output goes to
+# build/dot/ (see --emit-dot cfg in main.cpp).
 # ============================================================================
 
 CXX      := g++
@@ -18,7 +19,8 @@ BUILD := build
 BIN   := nemoc
 
 GEN_OBJ  := $(BUILD)/parser.tab.o $(BUILD)/lex.yy.o
-HAND_OBJ := $(BUILD)/ast.o $(BUILD)/symtab.o $(BUILD)/semantic.o $(BUILD)/main.o
+HAND_OBJ := $(BUILD)/ast.o $(BUILD)/symtab.o $(BUILD)/semantic.o \
+            $(BUILD)/ir.o $(BUILD)/lower.o $(BUILD)/cfg.o $(BUILD)/main.o
 
 .PHONY: all clean demo
 all: $(BIN)
@@ -51,14 +53,26 @@ $(BUILD)/symtab.o: $(SRC)/symtab.cpp $(SRC)/symtab.h $(SRC)/ast.h | $(BUILD)
 $(BUILD)/semantic.o: $(SRC)/semantic.cpp $(SRC)/semantic.h $(SRC)/symtab.h $(SRC)/ast.h | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
 
-$(BUILD)/main.o: $(SRC)/main.cpp $(SRC)/ast.h $(SRC)/semantic.h $(BUILD)/parser.tab.h | $(BUILD)
+$(BUILD)/ir.o: $(SRC)/ir.cpp $(SRC)/ir.h $(SRC)/ast.h | $(BUILD)
+	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
+
+$(BUILD)/lower.o: $(SRC)/lower.cpp $(SRC)/ir.h $(SRC)/ast.h | $(BUILD)
+	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
+
+$(BUILD)/cfg.o: $(SRC)/cfg.cpp $(SRC)/cfg.h $(SRC)/ir.h | $(BUILD)
+	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
+
+$(BUILD)/main.o: $(SRC)/main.cpp $(SRC)/ast.h $(SRC)/semantic.h $(SRC)/ir.h $(SRC)/cfg.h $(BUILD)/parser.tab.h | $(BUILD)
 	$(CXX) $(CXXFLAGS) -I$(SRC) -I$(BUILD) -c -o $@ $<
 
 $(BUILD):
 	mkdir -p $(BUILD)
 
-# ---- Phase A demo ------------------------------------------------------
-demo: $(BIN)
+$(BUILD)/dot:
+	mkdir -p $(BUILD)/dot
+
+# ---- demo (Phase A + Phase B) -------------------------------------------
+demo: $(BIN) $(BUILD)/dot
 	@echo "============ lexer: token stream of benchmarks/saxpy.nmc ============"
 	./$(BIN) benchmarks/saxpy.nmc --dump tokens
 	@echo
@@ -79,6 +93,12 @@ demo: $(BIN)
 	@echo
 	@echo "============ bison: grammar is conflict-free ========================"
 	@grep -qiE 'conflict' $(BUILD)/parser.output && grep -iE 'conflict' $(BUILD)/parser.output || echo "0 shift/reduce and 0 reduce/reduce conflicts (see build/parser.output)"
+	@echo
+	@echo "============ IR: three-address code for benchmarks/saxpy.nmc ========"
+	./$(BIN) benchmarks/saxpy.nmc --dump ir
+	@echo
+	@echo "============ CFG: writing build/dot/*.cfg.dot ========================"
+	./$(BIN) benchmarks/saxpy.nmc --emit-dot cfg
 
 clean:
 	rm -rf $(BUILD) $(BIN)
