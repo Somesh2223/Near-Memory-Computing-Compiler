@@ -1,19 +1,23 @@
 /* ============================================================================
  * main.cpp  --  NEMO-C driver
  *
- * Phase A scope: open a .nmc file and run the front end.
- *   --dump tokens   stop after lexical analysis, print the token stream
- *   --dump ast      lex + parse, print the AST, skip semantic analysis
- *   --check         lex + parse + semantic analysis, report pass/fail only
- *   (no flag)       all of the above, then print the AST
- * Later phases hang IR lowering, the optimiser and the near-memory passes off
- * the same Program* the parser produces here.
+ *   --dump tokens    stop after lexical analysis, print the token stream
+ *   --dump ast       lex + parse, print the AST, skip semantic analysis
+ *   --check          lex + parse + semantic analysis, report pass/fail only
+ *   --dump ir        lex + parse + semantic + lower to IR, print the IR
+ *   --emit-dot cfg   also build a CFG per kernel/host and write it to build/dot
+ *   (no flag)        lex + parse + semantic analysis, then print the AST
+ * Later phases hang the optimiser and the near-memory passes off the same
+ * IRProgram* that lower_program() produces here.
  * ==========================================================================*/
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "ast.h"
 #include "semantic.h"
+#include "ir.h"
+#include "cfg.h"
 #include "parser.tab.h"        /* token codes, YYSTYPE yylval, YYLTYPE yylloc */
 
 /* provided by the generated scanner / parser */
@@ -27,8 +31,26 @@ extern Program    *g_program;
 static void usage(const char *prog)
 {
 	fprintf(stderr,
-	        "usage: %s <file.nmc> [--dump tokens|ast | --check]\n"
-	        "  runs the NEMO-C front end on a source file\n", prog);
+	        "usage: %s <file.nmc> [--dump tokens|ast|ir | --check] [--emit-dot cfg]\n"
+	        "  runs the NEMO-C front end (and, for --dump ir / --emit-dot, the\n"
+	        "  IR lowering pass) on a source file\n", prog);
+}
+
+/* write build/dot/<name>.cfg.dot for one kernel or host block */
+static void emit_cfg_dot(Kernel *k)
+{
+	std::string path = "build/dot/" + k->name + ".cfg.dot";
+	FILE *out = fopen(path.c_str(), "w");
+	if (!out) {
+		fprintf(stderr,
+		        "nemoc: cannot write '%s' (did you 'mkdir -p build/dot'?)\n",
+		        path.c_str());
+		return;
+	}
+	CFG *g = build_cfg(k);
+	cfg_emit_dot(g, out);
+	fclose(out);
+	printf("nemoc: wrote %s (%d basic blocks)\n", path.c_str(), (int)g->blocks.size());
 }
 
 /* --------------------------------------------------------------------------
@@ -94,7 +116,8 @@ static int dump_tokens(void)
 int main(int argc, char **argv)
 {
 	const char *path = 0;
-	const char *mode = "full";        /* full | tokens | ast | check */
+	const char *mode = "full";        /* full | tokens | ast | check | ir */
+	bool        emit_cfg = false;
 	int i;
 
 	for (i = 1; i < argc; i++) {
@@ -102,6 +125,16 @@ int main(int argc, char **argv)
 			mode = argv[++i];
 		} else if (strcmp(argv[i], "--check") == 0) {
 			mode = "check";
+		} else if (strcmp(argv[i], "--emit-dot") == 0 && i + 1 < argc) {
+			const char *kind = argv[++i];
+			if (strcmp(kind, "cfg") == 0) {
+				emit_cfg = true;
+			} else {
+				fprintf(stderr,
+				        "%s: --emit-dot '%s' is not implemented yet "
+				        "(only 'cfg' so far)\n", argv[0], kind);
+				return 2;
+			}
 		} else if (strcmp(argv[i], "-h") == 0 ||
 		           strcmp(argv[i], "--help") == 0) {
 			usage(argv[0]);
@@ -119,8 +152,9 @@ int main(int argc, char **argv)
 		return 2;
 	}
 	if (strcmp(mode, "full") != 0 && strcmp(mode, "tokens") != 0 &&
-	    strcmp(mode, "ast") != 0 && strcmp(mode, "check") != 0) {
-		fprintf(stderr, "%s: --dump expects 'tokens' or 'ast'\n", argv[0]);
+	    strcmp(mode, "ast") != 0 && strcmp(mode, "check") != 0 &&
+	    strcmp(mode, "ir") != 0) {
+		fprintf(stderr, "%s: --dump expects 'tokens', 'ast' or 'ir'\n", argv[0]);
 		return 2;
 	}
 
@@ -157,12 +191,31 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
-	/* --check and default: run semantic analysis */
+	/* --check, --dump ir, --emit-dot cfg, and the default all need this */
 	int se = semantic_check(g_program);
 	if (se > 0) {
 		fprintf(stderr, "\nnemoc: %d semantic error%s in %s.\n",
 		        se, se == 1 ? "" : "s", path);
 		return 1;
+	}
+
+	if (strcmp(mode, "ir") == 0 || emit_cfg) {
+		IRProgram *irp = lower_program(g_program);
+
+		if (emit_cfg) {
+			size_t k;
+			for (k = 0; k < irp->kernels.size(); k++)
+				emit_cfg_dot(irp->kernels[k]);
+			for (k = 0; k < irp->hosts.size(); k++)
+				emit_cfg_dot(irp->hosts[k]);
+		}
+
+		if (strcmp(mode, "ir") == 0) {
+			printf("nemoc: %s passed lexing, parsing and semantic analysis.\n\n",
+			       path);
+			ir_print_program(irp);
+			return 0;
+		}
 	}
 
 	printf("nemoc: %s passed lexing, parsing and semantic analysis.\n", path);
