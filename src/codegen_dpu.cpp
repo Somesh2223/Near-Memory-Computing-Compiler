@@ -427,6 +427,8 @@ bool dpu_codegen(IRProgram *p, NestPlan *np, DProgram *out, std::string *err)
 			continue;
 		if (role.mode == AM_SCATTER)
 			continue;                                       /* handled as whole-array transfers */
+		if (role.local_only)
+			continue;                                       /* never leaves PIM: no row window */
 		int rOff = movi(&g, role.row_off - role.halo_lo, "rowoff");
 		int rr0 = newreg(&g, role.name + ".row0", false);
 		emit(&g, D_ADD, rr0, ri0, rOff);
@@ -434,7 +436,9 @@ bool dpu_codegen(IRProgram *p, NestPlan *np, DProgram *out, std::string *err)
 		int rn = newreg(&g, role.name + ".rows", false);
 		emit(&g, D_ADD, rn, rSpan0, rAdd);
 		windows.push_back(std::make_pair(role.name, std::make_pair(rr0, rn)));
-		if (role.read)
+		/* an array that never leaves PIM is produced and consumed inside the
+		 * scratchpad: there is nothing in the bank to fetch */
+		if (role.read && !role.local_only)
 			emit(&g, D_DMA_IN, -1, rr0, rn, row_bytes_of(p, role.name), role.name);
 	}
 

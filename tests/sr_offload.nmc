@@ -1,0 +1,20 @@
+// Strength reduction inside an OFFLOADED nest.  i*3 is a derived induction
+// variable; the optimiser turns the multiply into an accumulator that is bumped
+// by 3 each iteration.  Each DPU owns a slice of the iterations, so its
+// accumulator must restart from the value for ITS first iteration -- in the
+// interpreter and in the generated DPU program.  The simulator checks both
+// against the plain host result.
+array int Y[16384];
+
+kernel k() {
+    for (i = 0; i < 16384; i += 1) {
+        Y[i] = i * 3 + 1;
+    }
+}
+
+host main() {
+    call k();
+    print Y[5];
+    print Y[8191];
+    print Y[16383];
+}

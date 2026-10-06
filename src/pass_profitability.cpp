@@ -627,6 +627,15 @@ void explain_decision(IRProgram *p, NestAnalysis *na, const Decision *d)
 	printf("   [%s] class is not IRREGULAR\n", d->pclass != PC_IRREGULAR ? "pass" : "FAIL");
 	if (d->float_reduction)
 		printf("   [FAIL] float reduction would be reassociated (results would not be bit-identical)\n");
+	bool part_fail = false;
+	for (i = 0; i < d->fails.size(); i++)
+		if (d->fails[i].compare(0, 22, "partitioning impossible") == 0) {
+			printf("   [FAIL] the nest can be partitioned across the DPUs (owner-computes)\n"
+			       "          %s\n", d->fails[i].c_str() + 24);
+			part_fail = true;
+		}
+	if (!part_fail && d->offload)
+		printf("   [pass] the nest can be partitioned across the DPUs (owner-computes)\n");
 
 	printf("\nVerdict: %s.  %s\n", d->offload ? "OFFLOAD" : "REJECT", d->reason.c_str());
 }

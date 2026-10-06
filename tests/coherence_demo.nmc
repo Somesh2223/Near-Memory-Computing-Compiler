@@ -1,0 +1,26 @@
+// Coherence demo: the if/else merge.  The kernel writes C; the host then reads
+// C inside ONE branch only and again after the branches merge.  On the path
+// that skipped the branch C is still PimDirty, and the meet (union) at the
+// merge carries that fact forward, so the read after the merge needs its own
+// invalidate even though the then-branch already had one.
+array float A[256];
+array float C[256];
+scalar float alpha;
+
+kernel scale() {
+    for (i = 0; i < 256; i += 1) {
+        C[i] = A[i] * 2.0;
+    }
+}
+
+host main() {
+    alpha = 1.0;
+    for (i = 0; i < 256; i += 1) {
+        A[i] = i * 0.5;
+    }
+    call scale();
+    if (alpha > 0.0) {
+        print C[0];
+    }
+    print C[5];
+}

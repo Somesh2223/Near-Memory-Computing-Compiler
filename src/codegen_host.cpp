@@ -332,25 +332,25 @@ std::string host_codegen(ProgramPlan *pp, KernelPlan *kp, std::vector<DProgram*>
 
 	/* the trace runtime */
 	out += "/* ---- trace runtime: stands in for the vendor DPU API ---------------------- */\n";
-	out += "static void dpu_alloc(int n)                  { printf(\"[host] dpu_alloc(%d)\\n\", n); }\n";
-	out += "static void dpu_load(const char *prog)        { printf(\"[host] dpu_load(%s)\\n\", prog); }\n";
-	out += "static void dpu_set_args(int d, long first, long count, long stride)\n"
+	out += "static inline void dpu_alloc(int n)                  { printf(\"[host] dpu_alloc(%d)\\n\", n); }\n";
+	out += "static inline void dpu_load(const char *prog)        { printf(\"[host] dpu_load(%s)\\n\", prog); }\n";
+	out += "static inline void dpu_set_args(int d, long first, long count, long stride)\n"
 	       "    { printf(\"[host] dpu %d: first=%ld count=%ld stride=%ld\\n\", d, first, count, stride); }\n";
-	out += "static void dpu_set_scalar(int d, const char *n, double v)\n"
+	out += "static inline void dpu_set_scalar(int d, const char *n, double v)\n"
 	       "    { if (d == 0) printf(\"[host] launch argument %s = %g\\n\", n, v); }\n";
-	out += "static void dma_in(int d, const char *a, long row0, long nrows, long rowbytes)\n"
+	out += "static inline void dma_in(int d, const char *a, long row0, long nrows, long rowbytes)\n"
 	       "    { if (d < 2 || d == 63) printf(\"[host] dma_in  dpu %d  %s rows [%ld,%ld) = %ld bytes\\n\","
 	       " d, a, row0, row0 + nrows, nrows * rowbytes); }\n";
-	out += "static void dma_out(int d, const char *a, long row0, long nrows, long rowbytes)\n"
+	out += "static inline void dma_out(int d, const char *a, long row0, long nrows, long rowbytes)\n"
 	       "    { if (d < 2 || d == 63) printf(\"[host] dma_out dpu %d  %s rows [%ld,%ld) = %ld bytes\\n\","
 	       " d, a, row0, row0 + nrows, nrows * rowbytes); }\n";
-	out += "static void dpu_launch(void)                  { printf(\"[host] dpu_launch()\\n\"); }\n";
-	out += "static void dpu_sync(void)                    { printf(\"[host] dpu_sync()\\n\"); }\n";
-	out += "static double dpu_result(int d, const char *n) { (void)d; (void)n; return 0; }\n";
-	out += "static void host_merge_array(const char *a, int p) { printf(\"[host] merge %d private copies of %s\\n\", p, a); }\n";
-	out += "static void cache_flush(const char *a, size_t bytes)\n"
+	out += "static inline void dpu_launch(void)                  { printf(\"[host] dpu_launch()\\n\"); }\n";
+	out += "static inline void dpu_sync(void)                    { printf(\"[host] dpu_sync()\\n\"); }\n";
+	out += "static inline double dpu_result(int d, const char *n) { (void)d; (void)n; return 0; }\n";
+	out += "static inline void host_merge_array(const char *a, int p) { printf(\"[host] merge %d private copies of %s\\n\", p, a); }\n";
+	out += "static inline void cache_flush(const char *a, size_t bytes)\n"
 	       "    { printf(\"[host] cache_flush(%s)  /* %zu bytes written back */\\n\", a, bytes); }\n";
-	out += "static void cache_invalidate(const char *a, size_t bytes)\n"
+	out += "static inline void cache_invalidate(const char *a, size_t bytes)\n"
 	       "    { printf(\"[host] cache_invalidate(%s)  /* %zu bytes dropped */\\n\", a, bytes); }\n";
 	out += "\n";
 
@@ -370,8 +370,23 @@ std::string host_codegen(ProgramPlan *pp, KernelPlan *kp, std::vector<DProgram*>
 
 	/* the orchestration function */
 	out += "void nemoc_call_" + k->name + "(void)\n{\n";
+	/* temporaries are declared only for the code that stays on the host: an
+	 * offloaded nest's temporaries live in DPU registers, not here */
 	std::map<std::string, TypeTag> temps;
-	collect_temps(k->body, &temps);
+	{
+		size_t q, nj = 0;
+		for (q = 0; q < k->body.size(); q++) {
+			std::vector<BodyItem> one;
+			one.push_back(k->body[q]);
+			if (k->body[q].kind == BK_LOOP) {
+				NestPlan *np0 = nj < kp->nests.size() ? kp->nests[nj] : 0;
+				nj++;
+				if (np0 && np0->offload)
+					continue;
+			}
+			collect_temps(one, &temps);
+		}
+	}
 	std::map<std::string, TypeTag>::iterator ti;
 	for (ti = temps.begin(); ti != temps.end(); ti++)
 		out += std::string("    ") + ctype(ti->second) + " " + cname(ti->first) + ";\n";
