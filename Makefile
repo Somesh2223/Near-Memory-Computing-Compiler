@@ -108,7 +108,7 @@ demo: $(BIN) $(BUILD)/dot
 
 # ---- full evaluation (defined once the simulator exists) -------------------
 run-all: $(BIN) $(BUILD)/dot
-	./scripts/run_all.sh
+	bash scripts/run_all.sh
 
 clean:
 	rm -rf $(BUILD) $(BIN)
