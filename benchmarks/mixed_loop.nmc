@@ -1,0 +1,25 @@
+// One loop, two statements.  B[i] = 2*A[i] is elementwise-parallel, but
+// C[i] = C[i-1] + D[i] is a recurrence (a flow dependence carried by i), so the
+// whole loop is serial.  Loop fission separates them so the first can offload.
+array float A[16384];
+array float B[16384];
+array float C[16384];
+array float D[16384];
+
+kernel mixed() {
+    for (i = 1; i < 16384; i += 1) {
+        B[i] = A[i] * 2.0;
+        C[i] = C[i - 1] + D[i];
+    }
+}
+
+host main() {
+    for (i = 0; i < 16384; i += 1) {
+        A[i] = i * 0.5;
+        D[i] = (i % 5) * 0.25;
+    }
+    C[0] = 1.0;
+    call mixed();
+    print B[10];
+    print C[16383];
+}

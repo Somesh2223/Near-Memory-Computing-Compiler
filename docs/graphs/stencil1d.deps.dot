@@ -1,0 +1,8 @@
+digraph "deps_stencil1d" {
+  rankdir=TB;
+  node [shape=box, fontname="monospace", fontsize=10];
+  s0 [label="%t1 = A[%t0]"];
+  s1 [label="%t2 = A[i]"];
+  s2 [label="%t5 = A[%t4]"];
+  s3 [label="B[i] = %t7"];
+}

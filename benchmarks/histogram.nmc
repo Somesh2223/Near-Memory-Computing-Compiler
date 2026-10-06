@@ -1,0 +1,21 @@
+// Histogram: H[A[i]] += 1.  The subscript is data-dependent, but the update is
+// a recognised histogram reduction -> offload with a private histogram per DPU,
+// merged by summation afterwards.
+array int A[16384];
+array int H[256];
+
+kernel histogram() {
+    for (i = 0; i < 16384; i += 1) {
+        H[A[i]] = H[A[i]] + 1;
+    }
+}
+
+host main() {
+    for (i = 0; i < 16384; i += 1) {
+        A[i] = (i * 37 + 11) % 256;
+    }
+    call histogram();
+    print H[0];
+    print H[5];
+    print H[255];
+}

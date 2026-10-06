@@ -1,0 +1,19 @@
+// 3-point stencil: B[i] = (A[i-1] + A[i] + A[i+1]) / 4.  Parallel; each DPU
+// needs one halo row from each neighbour.
+array float A[16384];
+array float B[16384];
+
+kernel stencil1d() {
+    for (i = 1; i < 16383; i += 1) {
+        B[i] = (A[i - 1] + A[i] + A[i + 1]) * 0.25;
+    }
+}
+
+host main() {
+    for (i = 0; i < 16384; i += 1) {
+        A[i] = (i % 17) * 0.5;
+    }
+    call stencil1d();
+    print B[1];
+    print B[8000];
+}

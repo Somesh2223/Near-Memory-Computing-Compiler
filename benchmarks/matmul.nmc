@@ -1,0 +1,28 @@
+// Dense matrix multiply.  Every element of A, B and C is reused 16 times; a
+// cache captures that reuse, so arithmetic intensity is high -> REJECT.
+array float A[16, 16];
+array float B[16, 16];
+array float C[16, 16];
+
+kernel matmul() {
+    for (i = 0; i < 16; i += 1) {
+        for (j = 0; j < 16; j += 1) {
+            for (k = 0; k < 16; k += 1) {
+                C[i, j] = C[i, j] + A[i, k] * B[k, j];
+            }
+        }
+    }
+}
+
+host main() {
+    for (i = 0; i < 16; i += 1) {
+        for (j = 0; j < 16; j += 1) {
+            A[i, j] = (i + j) * 0.5;
+            B[i, j] = (i - j) * 0.25;
+            C[i, j] = 0.0;
+        }
+    }
+    call matmul();
+    print C[0, 0];
+    print C[15, 15];
+}

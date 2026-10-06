@@ -1,0 +1,21 @@
+// Gather through an index array: C[i] = A[B[i]].  The subscript A[B[i]] is not
+// affine, so the dependence tests cannot run -> IRREGULAR, REJECT.
+array float A[16384];
+array int   B[16384];
+array float C[16384];
+
+kernel gather() {
+    for (i = 0; i < 16384; i += 1) {
+        C[i] = A[B[i]];
+    }
+}
+
+host main() {
+    for (i = 0; i < 16384; i += 1) {
+        A[i] = i * 0.5;
+        B[i] = (i * 7919) % 16384;
+    }
+    call gather();
+    print C[5];
+    print C[16383];
+}

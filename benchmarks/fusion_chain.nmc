@@ -1,0 +1,23 @@
+// Two chained elementwise loops through an intermediate array T.  Fusing them
+// keeps T inside the DPUs: no round trip over the memory bus, one launch.
+array float A[16384];
+array float T[16384];
+array float C[16384];
+
+kernel chain() {
+    for (i = 0; i < 16384; i += 1) {
+        T[i] = A[i] * 2.0;
+    }
+    for (i = 0; i < 16384; i += 1) {
+        C[i] = T[i] + 1.0;
+    }
+}
+
+host main() {
+    for (i = 0; i < 16384; i += 1) {
+        A[i] = i * 0.5;
+    }
+    call chain();
+    print C[0];
+    print C[777];
+}

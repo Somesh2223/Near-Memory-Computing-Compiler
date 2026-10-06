@@ -1,0 +1,12 @@
+digraph "deps_gemv" {
+  rankdir=TB;
+  node [shape=box, fontname="monospace", fontsize=10];
+  s0 [label="%t0 = y[i]"];
+  s1 [label="%t1 = A[i, j]"];
+  s2 [label="%t2 = x[j]"];
+  s3 [label="y[i] = %t4"];
+  s0 -> s3 [label="anti y (=,<)", style=dashed, color=red];
+  s0 -> s3 [label="anti y (=,=)", style=dashed];
+  s3 -> s0 [label="flow y (=,<)", style=solid, color=red];
+  s3 -> s3 [label="output y (=,<)", style=dotted, color=red];
+}

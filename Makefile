@@ -1,16 +1,20 @@
 # ============================================================================
 # NEMO-C  --  near-memory-aware compiler.  Plain GNU Makefile (no CMake).
 #
-# `nemoc`: front end (lex, parse, semantic analysis) plus, as of Phase B, IR
-# lowering and CFG construction.  Generated scanner/parser go under build/;
-# hand-written C++17 sources live in src/; CFG Graphviz output goes to
-# build/dot/ (see --emit-dot cfg in main.cpp).
+#   make            build ./nemoc
+#   make demo       front-end + IR + CFG demo on the saxpy example
+#   make test       build and run the unit-test programs in tests/
+#   make run-all    compile + simulate every benchmark, write results/
+#   make clean
+#
+# Generated scanner/parser and all object files live in build/; hand-written
+# C++17 sources are in src/.  Header dependencies are tracked with -MMD.
 # ============================================================================
 
 CXX      := g++
-CXXFLAGS := -std=c++17 -g -O0 -Wall -Wextra
+CXXFLAGS := -std=c++17 -g -O1 -Wall -Wextra -ffp-contract=off
 # flex/bison output does not survive -Wall cleanly; build it with a plain set
-GENFLAGS := -std=c++17 -g -O0
+GENFLAGS := -std=c++17 -g -O1 -ffp-contract=off
 FLEX     := flex
 BISON    := bison
 
@@ -19,13 +23,17 @@ BUILD := build
 BIN   := nemoc
 
 GEN_OBJ  := $(BUILD)/parser.tab.o $(BUILD)/lex.yy.o
-HAND_OBJ := $(BUILD)/ast.o $(BUILD)/symtab.o $(BUILD)/semantic.o \
-            $(BUILD)/ir.o $(BUILD)/lower.o $(BUILD)/cfg.o $(BUILD)/main.o
+HAND_SRC := $(filter-out $(SRC)/main.cpp,$(wildcard $(SRC)/*.cpp))
+LIB_OBJ  := $(GEN_OBJ) $(patsubst $(SRC)/%.cpp,$(BUILD)/%.o,$(HAND_SRC))
+MAIN_OBJ := $(BUILD)/main.o
 
-.PHONY: all clean demo
+TEST_SRC := $(wildcard tests/test_*.cpp)
+TEST_BIN := $(patsubst tests/%.cpp,$(BUILD)/%,$(TEST_SRC))
+
+.PHONY: all clean demo test run-all
 all: $(BIN)
 
-$(BIN): $(GEN_OBJ) $(HAND_OBJ)
+$(BIN): $(LIB_OBJ) $(MAIN_OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 # ---- bison: LALR(1) tables, token header (-d), state report (-v),
@@ -37,33 +45,17 @@ $(BUILD)/parser.tab.c $(BUILD)/parser.tab.h: $(SRC)/parser.y | $(BUILD)
 $(BUILD)/lex.yy.c: $(SRC)/lexer.l $(BUILD)/parser.tab.h | $(BUILD)
 	$(FLEX) -o $@ $<
 
-# ---- compilation ---------------------------------------------------------
 $(BUILD)/parser.tab.o: $(BUILD)/parser.tab.c $(SRC)/ast.h
 	$(CXX) $(GENFLAGS) -I$(SRC) -I$(BUILD) -c -o $@ $<
 
 $(BUILD)/lex.yy.o: $(BUILD)/lex.yy.c $(BUILD)/parser.tab.h $(SRC)/ast.h
 	$(CXX) $(GENFLAGS) -I$(SRC) -I$(BUILD) -c -o $@ $<
 
-$(BUILD)/ast.o: $(SRC)/ast.cpp $(SRC)/ast.h | $(BUILD)
-	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
+# ---- hand-written sources (header dependencies via -MMD) -----------------
+$(BUILD)/%.o: $(SRC)/%.cpp $(BUILD)/parser.tab.h | $(BUILD)
+	$(CXX) $(CXXFLAGS) -MMD -MP -I$(SRC) -I$(BUILD) -c -o $@ $<
 
-$(BUILD)/symtab.o: $(SRC)/symtab.cpp $(SRC)/symtab.h $(SRC)/ast.h | $(BUILD)
-	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
-
-$(BUILD)/semantic.o: $(SRC)/semantic.cpp $(SRC)/semantic.h $(SRC)/symtab.h $(SRC)/ast.h | $(BUILD)
-	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
-
-$(BUILD)/ir.o: $(SRC)/ir.cpp $(SRC)/ir.h $(SRC)/ast.h | $(BUILD)
-	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
-
-$(BUILD)/lower.o: $(SRC)/lower.cpp $(SRC)/ir.h $(SRC)/ast.h | $(BUILD)
-	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
-
-$(BUILD)/cfg.o: $(SRC)/cfg.cpp $(SRC)/cfg.h $(SRC)/ir.h | $(BUILD)
-	$(CXX) $(CXXFLAGS) -I$(SRC) -c -o $@ $<
-
-$(BUILD)/main.o: $(SRC)/main.cpp $(SRC)/ast.h $(SRC)/semantic.h $(SRC)/ir.h $(SRC)/cfg.h $(BUILD)/parser.tab.h | $(BUILD)
-	$(CXX) $(CXXFLAGS) -I$(SRC) -I$(BUILD) -c -o $@ $<
+-include $(wildcard $(BUILD)/*.d)
 
 $(BUILD):
 	mkdir -p $(BUILD)
@@ -71,34 +63,35 @@ $(BUILD):
 $(BUILD)/dot:
 	mkdir -p $(BUILD)/dot
 
-# ---- demo (Phase A + Phase B) -------------------------------------------
+# ---- unit tests: every tests/test_*.cpp is its own program ---------------
+$(BUILD)/test_%: tests/test_%.cpp tests/testutil.h $(LIB_OBJ)
+	$(CXX) $(CXXFLAGS) -I$(SRC) -I$(BUILD) -Itests -o $@ $< $(LIB_OBJ)
+
+test: $(TEST_BIN)
+	@fail=0; for t in $(TEST_BIN); do \
+	    echo "=== $$t"; ./$$t || fail=1; \
+	done; \
+	if [ $$fail -ne 0 ]; then echo "SOME TESTS FAILED"; exit 1; fi; \
+	echo "ALL TEST PROGRAMS PASSED"
+
+# ---- demo ----------------------------------------------------------------
 demo: $(BIN) $(BUILD)/dot
 	@echo "============ lexer: token stream of benchmarks/saxpy.nmc ============"
 	./$(BIN) benchmarks/saxpy.nmc --dump tokens
 	@echo
-	@echo "============ lexer: invalid characters (tests/bad_token.nmc) ========"
-	-./$(BIN) tests/bad_token.nmc --dump tokens
-	@echo
-	@echo "============ parser: AST of benchmarks/saxpy.nmc (valid) ============"
-	./$(BIN) benchmarks/saxpy.nmc
-	@echo
 	@echo "============ parser: error recovery (tests/bad_syntax.nmc) =========="
 	-./$(BIN) tests/bad_syntax.nmc --dump ast
-	@echo
-	@echo "============ semantic analysis: valid program ======================="
-	./$(BIN) benchmarks/saxpy.nmc --check
 	@echo
 	@echo "============ semantic analysis: broken program ======================"
 	-./$(BIN) tests/bad_semantics.nmc --check
 	@echo
-	@echo "============ bison: grammar is conflict-free ========================"
-	@grep -qiE 'conflict' $(BUILD)/parser.output && grep -iE 'conflict' $(BUILD)/parser.output || echo "0 shift/reduce and 0 reduce/reduce conflicts (see build/parser.output)"
-	@echo
-	@echo "============ IR: three-address code for benchmarks/saxpy.nmc ========"
+	@echo "============ IR + CFG for benchmarks/saxpy.nmc ======================"
 	./$(BIN) benchmarks/saxpy.nmc --dump ir
-	@echo
-	@echo "============ CFG: writing build/dot/*.cfg.dot ========================"
-	./$(BIN) benchmarks/saxpy.nmc --emit-dot cfg
+	./$(BIN) benchmarks/saxpy.nmc --emit-dot cfg --check
+
+# ---- full evaluation (defined once the simulator exists) -------------------
+run-all: $(BIN) $(BUILD)/dot
+	./scripts/run_all.sh
 
 clean:
 	rm -rf $(BUILD) $(BIN)

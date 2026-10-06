@@ -1,0 +1,26 @@
+// Matrix-vector product y = y + A*x.  Rows are independent (parallel); the
+// inner loop accumulates one row, a reduction that stays inside one DPU.
+array float A[128, 128];
+array float x[128];
+array float y[128];
+
+kernel gemv() {
+    for (i = 0; i < 128; i += 1) {
+        for (j = 0; j < 128; j += 1) {
+            y[i] = y[i] + A[i, j] * x[j];
+        }
+    }
+}
+
+host main() {
+    for (i = 0; i < 128; i += 1) {
+        x[i] = i * 0.5;
+        y[i] = 0.0;
+        for (j = 0; j < 128; j += 1) {
+            A[i, j] = (i + j) * 0.25;
+        }
+    }
+    call gemv();
+    print y[0];
+    print y[127];
+}

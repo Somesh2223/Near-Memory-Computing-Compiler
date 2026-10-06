@@ -1,0 +1,20 @@
+digraph "main" {
+  rankdir=TB;
+  node [shape=box, fontname="monospace", fontsize=10];
+  n0 [label="entry (B0)\lalpha = 2\l"];
+  n1 [label="for.i.header (B1)\l"];
+  n2 [label="for.i.body (B2)\l%t0 = i * 0.5\lA[i] = %t0\l%t1 = i * 0.25\lB[i] = %t1\l"];
+  n3 [label="for.i.exit (B3)\lcall saxpy()\l%t2 = alpha > 0\l"];
+  n4 [label="if.then (B4)\l%t3 = C[0]\lprint %t3\l"];
+  n5 [label="if.else (B5)\l%t4 = C[1]\lprint %t4\l"];
+  n6 [label="if.merge (B6)\l%t5 = C[16383]\lprint %t5\l"];
+  n0 -> n1;
+  n1 -> n2;
+  n1 -> n3;
+  n2 -> n1;
+  n3 -> n4;
+  n3 -> n5;
+  n4 -> n6;
+  n5 -> n6;
+  n0 [peripheries=2];
+}
