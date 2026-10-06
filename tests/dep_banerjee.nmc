@@ -1,0 +1,36 @@
+// Dependence-test demo: run  ./nemoc tests/dep_banerjee.nmc --dump deps
+//
+//   kernel gcd_wins      A[2i] written, A[2i+1] read:
+//                        gcd(2,2) = 2 does not divide 1  -> the GCD test alone proves independence
+//   kernel banerjee_wins A[i] written, A[i+100] read, i in [0,64):
+//                        gcd(1,1) = 1 divides 100 -> GCD is inconclusive;
+//                        i - i' = 100 is outside [-63, 63] -> Banerjee proves independence
+//   kernel real_dep      A[i] written, A[i-1] read: a genuine flow dependence of distance 1,
+//                        both tests are inconclusive, direction vector (<), carried by i
+array float A[256];
+array float B[256];
+array float C[256];
+
+kernel gcd_wins() {
+    for (i = 0; i < 64; i += 1) {
+        A[i * 2] = A[i * 2 + 1] + 1.0;
+    }
+}
+
+kernel banerjee_wins() {
+    for (i = 0; i < 64; i += 1) {
+        B[i] = B[i + 100] + 1.0;
+    }
+}
+
+kernel real_dep() {
+    for (i = 1; i < 64; i += 1) {
+        C[i] = C[i - 1] + 1.0;
+    }
+}
+
+host main() {
+    call gcd_wins();
+    call banerjee_wins();
+    call real_dep();
+}

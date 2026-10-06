@@ -28,8 +28,12 @@ Program *frontend_parse(const char *path, int *nerrors)
 		*nerrors = -1;
 		return 0;
 	}
+	/* keep our own copy: callers pass temporaries, and later diagnostics (the
+	 * semantic pass) still need the file name */
+	static std::string stored_path;
+	stored_path = path;
 	g_error_count = 0;
-	g_srcfile = path;
+	g_srcfile = stored_path.c_str();
 	g_program = 0;
 	lexer_reset();
 	yyrestart(f);

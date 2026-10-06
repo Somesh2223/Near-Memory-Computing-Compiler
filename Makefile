@@ -88,6 +88,23 @@ demo: $(BIN) $(BUILD)/dot
 	@echo "============ IR + CFG for benchmarks/saxpy.nmc ======================"
 	./$(BIN) benchmarks/saxpy.nmc --dump ir
 	./$(BIN) benchmarks/saxpy.nmc --emit-dot cfg --check
+	@echo
+	@echo "============ classical optimisations (tests/opt_demo.nmc) ==========="
+	./$(BIN) tests/opt_demo.nmc --dump opt
+	@echo
+	@echo "============ GCD vs Banerjee (tests/dep_banerjee.nmc) ==============="
+	./$(BIN) tests/dep_banerjee.nmc --dump deps
+	@echo
+	@echo "============ the offload decision: saxpy accepted, matmul rejected =="
+	./$(BIN) benchmarks/saxpy.nmc --decisions
+	./$(BIN) benchmarks/matmul.nmc --decisions
+	./$(BIN) benchmarks/matmul.nmc --explain matmul
+	@echo
+	@echo "============ generated code for stencil1d ============================"
+	./$(BIN) benchmarks/stencil1d.nmc --codegen
+	@echo
+	@echo "============ simulation: matmul (the cost model declines it) ========"
+	./$(BIN) benchmarks/matmul.nmc --simulate
 
 # ---- full evaluation (defined once the simulator exists) -------------------
 run-all: $(BIN) $(BUILD)/dot

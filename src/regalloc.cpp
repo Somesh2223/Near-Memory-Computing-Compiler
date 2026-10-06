@@ -252,6 +252,13 @@ void regalloc_run(DProgram *prog, int K, RAResult *out, int verbose)
 
 	for (;;) {
 		out->rounds++;
+		if (out->rounds > 60) {            /* K too small for this program to colour at all */
+			fprintf(stderr, "regalloc: no colouring with K = %d after %d rounds\n", K, out->rounds);
+			out->verified = false;
+			out->registers_used = 0;
+			prog->allocated = false;
+			return;
+		}
 		size_t n = (size_t)prog->nvregs;
 		std::vector<std::vector<int> > succ;
 		std::vector<int> depth;
@@ -432,10 +439,30 @@ void regalloc_run(DProgram *prog, int K, RAResult *out, int verbose)
 			if (spill_rep.count(r) && !slot.count(r))
 				slot[r] = prog->nspill++;
 		}
+		/* LOOP tests its operands on EVERY iteration, including the one reached
+		 * over the back edge, so a reload placed only before LOOP would be skipped
+		 * after the first iteration.  Such reloads are repeated just before the
+		 * matching ENDLOOP so both incoming paths define the temporary. */
+		std::vector<int> loop_end(prog->code.size(), -1);
+		{
+			std::vector<int> stk;
+			for (i = 0; i < prog->code.size(); i++) {
+				if (prog->code[i].op == D_LOOP || prog->code[i].op == D_IFNZ)
+					stk.push_back((int)i);
+				else if (prog->code[i].op == D_ENDLOOP || prog->code[i].op == D_ENDIF) {
+					if (prog->code[stk.back()].op == D_LOOP)
+						loop_end[stk.back()] = (int)i;
+					stk.pop_back();
+				}
+			}
+		}
+		std::map<int, std::vector<DInstr> > before_end;
 		std::vector<DInstr> nc;
 		for (i = 0; i < prog->code.size(); i++) {
 			DInstr I = prog->code[i];
 			std::vector<DInstr> before, after;
+			if (I.op == D_ENDLOOP && before_end.count((int)i))
+				before = before_end[(int)i];
 			int u[3];
 			int nu = instr_uses(I, u);
 			for (int k = 0; k < nu; k++) {
@@ -450,6 +477,8 @@ void regalloc_run(DProgram *prog, int K, RAResult *out, int verbose)
 				ld.op = D_SPILL_LD; ld.fp = false; ld.d = t; ld.a = ld.b = -1;
 				ld.imm = slot[r]; ld.fimm = 0; ld.note = "reload";
 				before.push_back(ld);
+				if (I.op == D_LOOP && loop_end[i] >= 0)
+					before_end[loop_end[i]].push_back(ld);
 				replace_uses(I, u[k], t);
 			}
 			int d = instr_def(I);

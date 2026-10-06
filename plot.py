@@ -9,8 +9,10 @@ Standalone and entirely outside the compiler: it only reads results/results.csv
     results/energy.png   energy, in nanojoules
 
 The three benchmarks the cost model must decline (matmul, transpose, indirect)
-are marked with a dagger on the axis: there NAIVE_OFFLOAD is slower than
-HOST_ONLY and NEMO_C matches HOST_ONLY because it correctly refuses to offload.
+are marked with a dagger on the axis: in CYCLES, NAIVE_OFFLOAD is slower than
+HOST_ONLY there, and NEMO_C matches HOST_ONLY because it refuses to offload.
+(The cost model optimises time; the energy and bus-byte charts are reported as
+measured -- e.g. a strided host transpose is expensive in energy as well.)
 
 usage:  python plot.py [results.csv] [output-directory]
 """
@@ -58,7 +60,7 @@ def render(data, metric, title, filename, scale, outdir):
     ax.set_xticks(range(n))
     ax.set_xticklabels([b + (" †" if b in REJECTED else "") for b in benches],
                        rotation=40, ha="right")
-    ax.set_title(title + "\n† = nest the cost model rejects: NEMO_C declines, NAIVE_OFFLOAD pays for it")
+    ax.set_title(title + "\n† = nest the cost model rejects (NEMO_C declines to offload it)")
     ax.grid(axis="y", which="major", alpha=0.3)
     ax.legend()
     fig.tight_layout()

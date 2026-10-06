@@ -1,117 +1,165 @@
 # NEMO-C
 
-A near-memory-aware compiler for the NEMO-C source language. It analyses loop
-nests in a `.nmc` program, decides which ones are worth offloading to
-processing-in-memory (PIM) hardware using a cost model, and generates host
-orchestration code plus DPU kernel code for the ones it selects.
+A **near-memory-aware compiler**. It reads a small loop-and-array language (`.nmc`),
+analyses every loop nest, decides which nests are worth running on
+**processing-in-memory (PIM)** hardware, and generates host orchestration code plus
+DPU kernel code for the ones it selects. The decision comes from a cost model, not a
+syntactic pattern -- and the project's evidence that the model works is three
+benchmarks the compiler correctly *declines* to offload.
 
-University Compiler Design course project. The compiler is built to demonstrate
-classic compiler construction — lexing, LALR parsing, semantic analysis, IR,
-dependence analysis, dataflow analysis, loop transformations, classical
-optimisations, register allocation, code generation — applied to a near-memory
-target.
+University Compiler Design course project. Everything is built from scratch in C++17
+with flex and bison and the standard library -- no LLVM, no Boost.
 
-## Status
+## The result in one picture
 
-| Phase | Contents | State |
-|-------|----------|-------|
-| **A** | lexer, LALR parser, AST, symbol table, semantic analysis | **done** |
-| **B** | IR (loop-nest-preserving), CFG | **done** |
-| C | const-fold/prop, CSE, DCE, strength reduction, induction vars | next |
-| D | affine access matrices, GCD + Banerjee dependence tests, direction vectors | — |
-| E | offload profitability cost model (the headline pass) | — |
-| F | loop distribution (Allen–Kennedy), interchange, fusion | — |
-| G | partitioning (owner-computes), coherence dataflow | — |
-| H | host + DPU codegen, scratchpad tiling, Chaitin–Briggs register allocation | — |
-| I | cycle/byte/energy simulator, benchmark suite | — |
-| J | per-pass unit tests, result tables, charts | — |
+`make run-all` simulates every benchmark under three configurations and verifies each
+is **bit-identical** to the plain host execution:
 
-## Build
+| config | what it does |
+|---|---|
+| `HOST_ONLY` | everything on the host CPU |
+| `NAIVE_OFFLOAD` | offload every parallel loop, ignoring the cost model |
+| `NEMO_C` | cost-model-guided, with fission / interchange / fusion |
 
-Requires a C++17 compiler, GNU `make`, `flex`, and `bison`. Standard library
-only — no LLVM, no Boost.
+![cycles](results/cycles.png)
+
+The three nests the cost model rejects are marked **†**: there `NAIVE_OFFLOAD` is
+**slower in cycles** than `HOST_ONLY` (matmul 0.63x, transpose 0.70x, indirect 0.43x), while
+`NEMO_C` matches `HOST_ONLY` exactly because it declines. See
+[`results/decisions.md`](results/decisions.md) for every verdict with the numbers behind
+it, [`results/transformations.md`](results/transformations.md) for what fission,
+interchange and fusion bought, and [`docs/simulator_model.md`](docs/simulator_model.md)
+for why the model produces these results.
+
+## Build, test, run
+
+Needs a C++17 compiler, GNU `make`, `flex` and `bison`. (On Windows this repository is
+built inside WSL Ubuntu.) `plot.py` additionally needs `matplotlib`; it is the only
+thing outside the compiler.
 
 ```bash
-make          # builds ./nemoc
-make demo     # parses benchmarks/saxpy.nmc and tests/bad_syntax.nmc
+make              # build ./nemoc
+make demo         # tour of the front end on saxpy
+make test         # eight unit-test programs (a few minutes: they simulate every benchmark)
+make run-all      # compile + simulate every benchmark -> results/, docs/graphs/
 make clean
 ```
 
-## Run
+### The `nemoc` command line
 
-```bash
-./nemoc file.nmc                 # lex + parse + semantic checks, then print the AST
-./nemoc file.nmc --dump tokens   # stop after the lexer, print the token stream
-./nemoc file.nmc --dump ast      # lex + parse only, print the AST (no semantic pass)
-./nemoc file.nmc --check         # lex + parse + semantic checks, report pass/fail only
-./nemoc file.nmc --dump ir       # ...then lower to IR and print it (three-address code)
-./nemoc file.nmc --emit-dot cfg  # also build a CFG per kernel/host -> build/dot/*.cfg.dot
+```text
+./nemoc prog.nmc                        lex + parse + check, print the AST
+./nemoc prog.nmc --dump tokens          the token stream with line:col
+./nemoc prog.nmc --dump ast|ir          the AST / the unoptimised three-address IR
+./nemoc prog.nmc --dump opt             the IR after all five classical passes
+./nemoc prog.nmc --dump constfold|cse|dce|indvar|strength
+                                        one pass: IR before, the pass's analysis, IR after
+./nemoc prog.nmc --dump affine          access matrices F and offsets c
+./nemoc prog.nmc --dump deps            dependences, GCD vs Banerjee verdicts, parallel loops
+./nemoc prog.nmc --decisions            one OFFLOAD/REJECT record per nest
+./nemoc prog.nmc --explain <kernel>     the complete decision trace in plain English
+./nemoc prog.nmc --transformations      fission / interchange / fusion log
+./nemoc prog.nmc --partition            how each offloaded nest is cut across the DPUs
+./nemoc prog.nmc --coherence            flush/invalidate placement with the dataflow table
+./nemoc prog.nmc --codegen              write build/<kernel>_host.c and build/<nest>_dpu.pim
+./nemoc prog.nmc --dump regalloc --regs 6   live intervals, colouring order, spills
+./nemoc prog.nmc --emit-dot cfg|deps|interference   Graphviz files in build/dot/
+./nemoc prog.nmc --simulate [--csv f]   three configurations, verified, with a table
 ```
 
-Exit status is non-zero if any lexical, syntax, or semantic error is found.
-`--emit-dot cfg` needs `build/dot/` to exist (`make` creates it; `mkdir -p build/dot`
-otherwise). Render a graph with e.g. `dot -Tpng build/dot/saxpy.cfg.dot -o saxpy.png`
-(Graphviz) or any `.dot` viewer/extension — nemoc itself only writes the text.
+A good first five minutes: `--decisions` on `benchmarks/matmul.nmc` and
+`benchmarks/saxpy.nmc`, then `--explain matmul`, then `--simulate` on the same two.
+
+## What each pass does and which classical algorithm it is
+
+Every source file opens with a comment naming the concept and the algorithm.
+
+### Front end
+| file | concept |
+|---|---|
+| [`lexer.l`](src/lexer.l) | regular expressions -> DFA, maximal munch, keyword-before-identifier ordering, exact line/column tracking |
+| [`parser.y`](src/parser.y) | LALR(1) bottom-up parsing; **0 conflicts** (`%expect 0`); operator-precedence disambiguation; panic-mode error recovery |
+| [`ast.h`](src/ast.h) | the AST as tagged structs (enum kind + field superset), no class hierarchy |
+| [`symtab.cpp`](src/symtab.cpp) | scoped symbol table, most-closely-nested-scope lookup |
+| [`semantic.cpp`](src/semantic.cpp) | name resolution + bottom-up type synthesis; all errors collected with file:line:col |
+
+### IR and classical optimisations
+| file | concept |
+|---|---|
+| [`ir.h`](src/ir.h), [`lower.cpp`](src/lower.cpp) | three-address code at the statement level, **structured** (nested) loops and if/else |
+| [`cfg.cpp`](src/cfg.cpp) | basic blocks and flow graph built on demand; merge blocks and loop back edges |
+| [`opt_constfold.cpp`](src/opt_constfold.cpp) | constant propagation/folding: forward data-flow, lattice UNDEF / CONST / NAC |
+| [`opt_cse.cpp`](src/opt_cse.cpp) | local common-subexpression elimination via available expressions |
+| [`opt_dce.cpp`](src/opt_dce.cpp) | backward live-variable analysis, dead-code elimination |
+| [`opt_indvar.cpp`](src/opt_indvar.cpp), [`opt_strength.cpp`](src/opt_strength.cpp) | basic/derived induction variables; strength reduction of `i*c` to an additive update |
+
+### Near-memory analyses and transformations
+| file | concept |
+|---|---|
+| [`pass_affine.cpp`](src/pass_affine.cpp) | affine subscripts: access matrix **F** and offset **c** per reference (`f(i) = F·i + c`) |
+| [`pass_dependence.cpp`](src/pass_dependence.cpp) | **GCD test** and **Banerjee bounds test** (each reported separately), direction vectors, flow/anti/output classification, parallelism, reduction recognition |
+| [`pass_profitability.cpp`](src/pass_profitability.cpp) | roofline model + Wolf-Lam reuse analysis; the decision rule; `--explain` |
+| [`pass_fission.cpp`](src/pass_fission.cpp) | **Allen-Kennedy loop distribution**: SCCs by **Tarjan's algorithm**, topological order, one loop per SCC |
+| [`pass_interchange.cpp`](src/pass_interchange.cpp) | loop permutation, legality on direction vectors |
+| [`pass_fusion.cpp`](src/pass_fusion.cpp) | loop fusion, legality by the dependence graph, bytes saved |
+| [`pass_partition.cpp`](src/pass_partition.cpp) | **owner-computes** partitioning, halo analysis, block / cyclic / block-cyclic costed |
+| [`pass_coherence.cpp`](src/pass_coherence.cpp) | forward data-flow over the CFG, lattice = sets of arrays, meet = union ([write-up](docs/coherence_analysis.md)) |
+
+### Back end
+| file | concept |
+|---|---|
+| [`codegen_dpu.cpp`](src/codegen_dpu.cpp) | instruction selection for the PIM ISA, **scratchpad tiling** (the arithmetic is in the generated file) |
+| [`regalloc.cpp`](src/regalloc.cpp) | **Chaitin-Briggs graph colouring**: liveness, interference graph, Briggs-conservative coalescing, simplify, optimistic select, spill by cost/degree, K = 24 |
+| [`codegen_host.cpp`](src/codegen_host.cpp) | host orchestration C: partition setup, DMA in, launch, DMA out, merge, flush/invalidate |
+| [`dpu_interp.cpp`](src/dpu_interp.cpp) | runs the *generated* DPU programs -- translation validation |
+| [`simulator.cpp`](src/simulator.cpp) | functional execution + host cache model + DPU/DMA/bank-conflict model + coherence checker |
+
+## The offload decision rule
+
+```
+OFFLOAD  iff  arithmetic intensity < MACHINE_BALANCE (0.5 flop/byte)
+         and  no reference has significant self-temporal reuse
+         and  the outermost loop is parallel by direction-vector analysis (or a recognised reduction)
+         and  the class is not IRREGULAR
+         and  the nest can be partitioned across DPUs (no all-to-all shuffle)
+```
+
+Classes: ELEMENTWISE, REDUCTION, STENCIL, COMPUTE_BOUND, IRREGULAR -- decided from
+direction vectors and access matrices, never from syntax.
+
+## Deviations from the brief, and why (read these before the viva)
+
+1. **One `stmt` non-terminal.** The brief's grammar splits `stmt` / `hstmt` (call and
+   print host-only) but its own example puts `print` inside a host `if`, which that
+   grammar cannot derive. "Host-only" is context-sensitive, so the grammar accepts the
+   superset and `semantic.cpp` rejects `call`/`print` in a kernel.
+2. **Self-temporal reuse must be *significant*.** Read literally, "no reference has a
+   zero column in F" rejects `gemv` (the vectors `x` and `y` are reused) although the
+   brief expects it to offload. The rule here counts reuse only for a stream carrying at
+   least `REUSE_SIGNIFICANCE` (10%) of the traffic: in `gemv` the matrix is >98% of the
+   bytes and has no reuse; in `matmul` each of A, B and C is a third.
+3. **Float reductions across DPUs are rejected.** Partial sums would be added in a
+   different order, so the result would not be bit-identical. `dotprod` therefore
+   accumulates integers. An inner reduction that stays inside one DPU (gemv) is fine.
+4. **A few additions to the PIM ISA** (compares, `MOV`, `MIN`, `ARG`/`RET`, `FILL`, `.F`
+   variants) -- the minimal list in the brief cannot express a conditional or a max.
+5. **Constants added to `config.h`** (launch overhead, DMA segment cost, multiply cost,
+   cache size, ...), each with a justification in the file.
+6. **Fusion requires both loops to use the same index-variable name; fission refuses
+   loops that contain strength-reduced accumulators; CSE across source statements ties
+   them together for fission.** Documented limits, not bugs.
 
 ## Layout
 
 ```
-src/    lexer.l parser.y ast.{h,cpp} symtab.{h,cpp} semantic.{h,cpp}
-        ir.{h,cpp} lower.cpp cfg.{h,cpp} main.cpp + (later) the passes
-build/  generated scanner/parser + object files + bison state report + dot/
-benchmarks/  the .nmc benchmark programs
-tests/       malformed inputs and (later) per-pass unit tests
-docs/        analysis write-ups and Graphviz output
+src/          the compiler (see the tables above)
+benchmarks/   the 15 programs: 14 from the brief + colmajor (loop interchange)
+tests/        unit-test programs, demo inputs (bad_*.nmc, dep_banerjee.nmc, coherence_demo.nmc)
+results/      results.csv, decisions.md, transformations.md, cycles/bytes/energy.png
+docs/         coherence_analysis.md, simulator_model.md, graphs/ (Graphviz .dot files)
+scripts/      run_all.sh  (make run-all)
+plot.py       renders the CSV with matplotlib; independent of the compiler
 ```
 
-## Front end (Phase A — complete)
-
-- **`src/lexer.l`** — flex scanner. Maximal-munch tokenisation with keyword-
-  before-identifier rule ordering; exact line/column tracking via
-  `YY_USER_ACTION` for diagnostics. `//` and `/* */` comments are consumed as
-  whitespace.
-- **`src/parser.y`** — bison LALR(1) grammar building the AST through
-  syntax-directed actions. **Zero shift/reduce and reduce/reduce conflicts**
-  (`%expect 0`); the header comment explains why the mandatory-brace `if`/`else`
-  avoids the dangling-else conflict entirely and how operator precedence is
-  resolved with `%left`/`%nonassoc` declarations. `stmt: error ';'` gives
-  panic-mode recovery so multiple syntax errors are reported in one run.
-- **`src/ast.{h,cpp}`** — the AST as tagged structs (`Kind` enum + superset of
-  fields), no class hierarchy. `ast.cpp` also has the recursive pretty-printer.
-- **`src/symtab.{h,cpp}`** — block-structured symbol table: a stack of scopes,
-  most-closely-nested-scope lookup. Global scope holds arrays / scalars /
-  kernels / host blocks; each `for` opens a nested scope holding just its index
-  variable, so the index is undefined outside the loop.
-- **`src/semantic.cpp`** — syntax-directed AST walk doing name resolution and
-  bottom-up type synthesis. Two passes (collect top-level names, then check
-  bodies). Checks: undeclared identifiers; int/float type rules with int→float
-  promotion and no implicit narrowing; array subscript count vs declaration;
-  integer-only subscripts; constant loop bounds; consistent `for`-header index
-  variable, positive step, `<`/`<=` test; loop index not reassigned or shadowed;
-  `call`/`print` only in host code; redeclarations. All errors are collected in
-  one run with `file:line:col` positions.
-
-## IR and CFG (Phase B — complete)
-
-- **`src/ir.h`** — the IR. Deliberately two-level: statements are
-  **three-address code** (one operation each, temps named `%t0`, `%t1`, …),
-  but loops and if/else stay **structured** (`LoopNest` / `IfNode` hold nested
-  bodies) rather than being dissolved into a flat graph — every later pass
-  (dependence analysis, the cost model, fission/interchange/fusion,
-  partitioning) needs a real loop nest to walk. `IndexExpr` (affine subscript
-  classification) is declared here but populated later, by `pass_affine.cpp`
-  in Phase D; every subscript starts out `IDX_NON_AFFINE`.
-- **`src/lower.cpp`** — AST → IR. Flattens each expression to 3AC by
-  introducing a fresh temp per subexpression bottom-up, e.g.
-  `C[i] = alpha*A[i] + B[i]` becomes
-  `%t0=A[i]; %t1=alpha*%t0; %t2=B[i]; %t3=%t1+%t2; C[i]=%t3`. Loop bounds are
-  folded to plain integers here, since semantic analysis already proved they
-  are compile-time constants. Assumes `semantic_check()` returned 0.
-- **`src/cfg.{h,cpp}`** — flattens the same nested IR into a real
-  control-flow graph of basic blocks, one CFG per kernel/host block, built
-  fresh on demand (the nested IR itself is untouched). This is where if/else
-  needs real work: both branches (or the false fall-through) reconverge at an
-  explicit **merge block** — the join point classical dataflow analysis takes
-  a meet over — and a loop's body closes with a **back edge** into its own
-  header. `--emit-dot cfg` writes one Graphviz file per kernel/host to
-  `build/dot/`.
+Render a Graphviz file with `dot -Tpng docs/graphs/saxpy_main.cfg.dot -o cfg.png`
+(Graphviz is not needed to build or run anything).
