@@ -88,15 +88,18 @@ enum IRStmtKind {
 	IR_BINOP,        /* dst            = lhs op rhs     */
 	IR_COPY,         /* dst            = src            */
 	IR_CALL,         /* call callee()                   */
-	IR_PRINT         /* print src                        */
+	IR_PRINT,        /* print src                        */
+	IR_FLUSH,        /* flush(array)       -- Phase G, host cache -> memory     */
+	IR_INVALIDATE    /* invalidate(array)  -- Phase G, drop stale cache lines   */
 };
 
 struct IRStmt {
 	IRStmtKind kind;
 	Loc        loc;
 
+	TypeTag                dst_type; /* type stored into dst (IR_ARRAY_LOAD, IR_BINOP, IR_COPY) */
 	std::string            dst;      /* IR_ARRAY_LOAD, IR_BINOP, IR_COPY  */
-	std::string            array;    /* IR_ARRAY_LOAD, IR_ARRAY_STORE     */
+	std::string            array;    /* IR_ARRAY_LOAD/STORE, IR_FLUSH, IR_INVALIDATE */
 	std::vector<Subscript> idx;      /* IR_ARRAY_LOAD, IR_ARRAY_STORE     */
 	OpKind                 op;       /* IR_BINOP                          */
 	Operand                lhs;      /* IR_BINOP                          */
@@ -106,16 +109,50 @@ struct IRStmt {
 };
 
 IRStmt *mk_load      (const std::string &dst, const std::string &array,
-                      const std::vector<Subscript> &idx, Loc l);
+                      const std::vector<Subscript> &idx, TypeTag elem_type, Loc l);
 IRStmt *mk_store     (const std::string &array, const std::vector<Subscript> &idx,
                       Operand src, Loc l);
 IRStmt *mk_binop_stmt(const std::string &dst, int op, Operand lhs, Operand rhs, Loc l);
-IRStmt *mk_copy      (const std::string &dst, Operand src, Loc l);
+IRStmt *mk_copy      (const std::string &dst, Operand src, TypeTag dst_type, Loc l);
 IRStmt *mk_call_stmt (const std::string &callee, Loc l);
 IRStmt *mk_print_stmt(Operand src, Loc l);
+IRStmt *mk_flush_stmt(const std::string &array, Loc l);
+IRStmt *mk_invalidate_stmt(const std::string &array, Loc l);
 
 std::string ir_stmt_text(IRStmt *s);   /* one-line rendering, shared by the
                                          * pretty printer and the .dot export */
+std::string opd_text(const Operand &o);
+bool        opd_is_name(const Operand &o);
+bool        opd_equal(const Operand &a, const Operand &b);
+bool        is_temp_name(const std::string &n);   /* compiler temp: starts with '%' */
+
+/* ---- def/use of one statement (shared by every dataflow pass) --------------
+ * ir_stmt_def: the name a statement writes ("" if none -- a store writes
+ * memory, not a name).  ir_stmt_uses: every name it reads, including array
+ * subscript operands but NOT the array itself (arrays are memory). */
+std::string ir_stmt_def(IRStmt *s);
+void        ir_stmt_uses(IRStmt *s, std::vector<std::string> *out);
+
+/* ---- run-time values and arithmetic ----------------------------------------
+ * ONE definition of what every operator means, used by the constant folder AND
+ * the interpreter, so folding at compile time can never disagree with
+ * execution.  ints are 64-bit; floats are IEEE single precision.  x/0 and x%0
+ * on ints yield 0. */
+struct Value {
+	TypeTag type;
+	long    i;
+	float   f;
+};
+
+Value  mk_val_int  (long v);
+Value  mk_val_float(float v);
+Value  value_convert(Value v, TypeTag t);       /* int->float promotion etc.   */
+Value  value_of_operand(const Operand &o);      /* literal operands only       */
+Value  eval_binop(int op, Value a, Value b);
+bool   value_equal_bits(Value a, Value b);      /* bit-exact comparison        */
+std::string value_text(Value v);
+
+
 
 /* ---- structured control: loop nests and if/else stay nested ------------ */
 enum BodyKind {
@@ -156,6 +193,10 @@ struct IfNode {
 	Loc                   loc;
 };
 
+/* ---- body walking helpers -------------------------------------------------- */
+void ir_collect_stmts(std::vector<BodyItem> &body, std::vector<IRStmt*> *out);
+void ir_collect_loops(std::vector<BodyItem> &body, std::vector<LoopNest*> *out);
+
 /* ---- kernels / host blocks / whole program ------------------------------ */
 struct Kernel {
 	std::string           name;
@@ -170,12 +211,24 @@ struct ArrayInfo {
 	std::vector<int> dims;
 };
 
+/* A derived induction variable:  name == coeff * <basic loop index> + offset.
+ * opt_strength.cpp records the accumulators it creates here so Phase D's affine
+ * analysis can still see the original affine form behind them. */
+struct IVInfo {
+	std::string basic;    /* the loop index this variable is an affine function of */
+	long        coeff;
+	long        offset;
+};
+
 struct IRProgram {
 	std::map<std::string, ArrayInfo> arrays;
 	std::map<std::string, TypeTag>   scalars;
 	std::vector<Kernel*>             kernels;   /* offload candidates          */
 	std::vector<Kernel*>             hosts;     /* definitely-CPU code         */
+	std::map<std::string, IVInfo>    ivs;       /* derived IVs (see IVInfo)    */
 };
+
+Kernel *ir_find_kernel(IRProgram *p, const std::string &name);
 
 /* ---- construction (lower.cpp) ------------------------------------------ */
 IRProgram *lower_program(Program *ast);   /* assumes semantic_check(ast) == 0 */

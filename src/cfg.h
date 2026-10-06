@@ -15,6 +15,11 @@ struct BasicBlock {
 	std::string          label;   /* e.g. "for.i.header", "if.merge"          */
 	std::vector<IRStmt*> stmts;   /* straight-line code, in order              */
 	std::vector<int>     succ;    /* successor block ids                       */
+	std::vector<int>     pred;    /* predecessor block ids (filled by build)   */
+
+	/* control information the dataflow passes need but IRStmt cannot carry */
+	LoopNest *loop_header;        /* non-null: this block tests/increments a loop index */
+	IfNode   *branch;             /* non-null: this block ends in the if's condition    */
 };
 
 struct CFG {

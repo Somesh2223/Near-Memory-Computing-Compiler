@@ -1,0 +1,26 @@
+// Threshold filter: data-dependent control flow inside the loop, still
+// elementwise-parallel.
+array float A[16384];
+array float B[16384];
+scalar float t;
+
+kernel filter() {
+    for (i = 0; i < 16384; i += 1) {
+        if (A[i] > t) {
+            B[i] = A[i];
+        } else {
+            B[i] = 0.0;
+        }
+    }
+}
+
+host main() {
+    t = 4000.0;
+    for (i = 0; i < 16384; i += 1) {
+        A[i] = (i * 13 % 1000) * 8.0;
+    }
+    call filter();
+    print B[0];
+    print B[500];
+    print B[16383];
+}

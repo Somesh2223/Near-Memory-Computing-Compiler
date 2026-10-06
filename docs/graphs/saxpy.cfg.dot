@@ -1,0 +1,13 @@
+digraph "saxpy" {
+  rankdir=TB;
+  node [shape=box, fontname="monospace", fontsize=10];
+  n0 [label="entry (B0)\l"];
+  n1 [label="for.i.header (B1)\l"];
+  n2 [label="for.i.body (B2)\l%t0 = A[i]\l%t1 = alpha * %t0\l%t2 = B[i]\l%t3 = %t1 + %t2\lC[i] = %t3\l"];
+  n3 [label="for.i.exit (B3)\l"];
+  n0 -> n1;
+  n1 -> n2;
+  n1 -> n3;
+  n2 -> n1;
+  n0 [peripheries=2];
+}

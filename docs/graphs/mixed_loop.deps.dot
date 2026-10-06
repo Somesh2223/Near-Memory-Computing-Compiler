@@ -1,0 +1,10 @@
+digraph "deps_mixed" {
+  rankdir=TB;
+  node [shape=box, fontname="monospace", fontsize=10];
+  s0 [label="%t0 = A[i]"];
+  s1 [label="B[i] = %t1"];
+  s2 [label="%t3 = C[%t2]"];
+  s3 [label="%t4 = D[i]"];
+  s4 [label="C[i] = %t5"];
+  s4 -> s2 [label="flow C (<)", style=solid, color=red];
+}

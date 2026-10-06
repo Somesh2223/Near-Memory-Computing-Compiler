@@ -1,0 +1,37 @@
+// Exercises every classical optimisation.
+array float A[64];
+array float D[64];
+array int   X[256];
+scalar int   n;
+scalar float s;
+scalar int   k;
+
+kernel work() {
+    // constant propagation + folding: n becomes 3*4 = 12, k stays unknown
+    n = 3 * 4;
+    for (i = 0; i < 64; i += 1) {
+        // CSE: A[i] is loaded three times, i*2 is computed twice
+        D[i] = A[i] * A[i] + A[i];
+        // induction variable i*4 -> strength reduction
+        X[i * 4] = n + i;
+        X[i * 4 + 1] = i * 2;
+        X[i * 2] = k;
+    }
+    // dead scalar assignment (overwritten before any use)
+    s = 1.0;
+    s = 2.5;
+}
+
+host main() {
+    for (i = 0; i < 64; i += 1) {
+        A[i] = i * 0.5;
+    }
+    k = 7;
+    call work();
+    // folded branch: 2 > 1 is a compile-time constant
+    if (2 > 1) {
+        print s;
+    } else {
+        print n;
+    }
+}

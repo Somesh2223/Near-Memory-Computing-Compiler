@@ -40,8 +40,10 @@ struct CfgBuilder {
 static int new_block(CfgBuilder *b, const std::string &label)
 {
 	BasicBlock *bb = new BasicBlock();
-	bb->id    = (int)b->g->blocks.size();
-	bb->label = label;
+	bb->id          = (int)b->g->blocks.size();
+	bb->label       = label;
+	bb->loop_header = 0;
+	bb->branch      = 0;
 	b->g->blocks.push_back(bb);
 	return bb->id;
 }
@@ -56,6 +58,7 @@ static void build_seq(CfgBuilder *b, std::vector<BodyItem> &items);
 static void build_if(CfgBuilder *b, IfNode *n)
 {
 	int cond_blk = b->cur;   /* the condition test lives at the end of this block */
+	b->g->blocks[cond_blk]->branch = n;
 
 	int then_entry = new_block(b, "if.then");
 	connect(b, cond_blk, then_entry);
@@ -86,6 +89,7 @@ static void build_loop(CfgBuilder *b, LoopNest *ln)
 	int pred = b->cur;
 
 	int header = new_block(b, "for." + ln->index_var + ".header");
+	b->g->blocks[header]->loop_header = ln;
 	connect(b, pred, header);
 
 	int body_entry = new_block(b, "for." + ln->index_var + ".body");
@@ -130,6 +134,12 @@ CFG *build_cfg(Kernel *k)
 	 * last merge/loop-exit block, or "entry" itself if there was no control
 	 * flow at all */
 	g->exit = b.cur;
+
+	/* fill predecessor lists from the successor lists */
+	size_t i, j;
+	for (i = 0; i < g->blocks.size(); i++)
+		for (j = 0; j < g->blocks[i]->succ.size(); j++)
+			g->blocks[g->blocks[i]->succ[j]]->pred.push_back((int)i);
 	return g;
 }
 

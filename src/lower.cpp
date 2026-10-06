@@ -123,7 +123,7 @@ static Operand lower_expr(LowerCtx *c, Expr *e, std::vector<BodyItem> *out)
 			elem_type = it->second.elem_type;
 
 		std::string t = new_temp(c);
-		out->push_back(mk_bi_stmt(mk_load(t, e->name, idx, e->loc)));
+		out->push_back(mk_bi_stmt(mk_load(t, e->name, idx, elem_type, e->loc)));
 		return mk_opd_name(t, elem_type);
 	}
 
@@ -162,7 +162,8 @@ static void lower_stmt(LowerCtx *c, Stmt *s, std::vector<BodyItem> *out)
 	case SK_ASSIGN: {
 		if (s->target->kind == EK_IDENT) {
 			Operand v = lower_expr(c, s->value, out);
-			out->push_back(mk_bi_stmt(mk_copy(s->target->name, v, s->loc)));
+			out->push_back(mk_bi_stmt(mk_copy(s->target->name, v,
+			                                  name_type(c, s->target->name), s->loc)));
 		} else {
 			std::vector<Subscript> idx = lower_subscripts(c, s->target->index, out);
 			Operand v = lower_expr(c, s->value, out);

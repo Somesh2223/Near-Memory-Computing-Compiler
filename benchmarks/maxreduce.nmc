@@ -1,0 +1,20 @@
+// Maximum of an array: a conditional max reduction -> offload.
+array float A[16384];
+scalar float m;
+
+kernel maxreduce() {
+    for (i = 0; i < 16384; i += 1) {
+        if (A[i] > m) {
+            m = A[i];
+        }
+    }
+}
+
+host main() {
+    for (i = 0; i < 16384; i += 1) {
+        A[i] = (i * 7 % 1000) * 0.5;
+    }
+    m = -1.0;
+    call maxreduce();
+    print m;
+}

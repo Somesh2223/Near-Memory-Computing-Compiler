@@ -1,0 +1,22 @@
+// Dot product over integers: a sum reduction -> offload, per-DPU partial sums
+// merged on the host.  Integer data, so the reassociation is exact and the
+// result is bit-identical to the sequential sum.
+array int A[16384];
+array int B[16384];
+scalar int s;
+
+kernel dotprod() {
+    for (i = 0; i < 16384; i += 1) {
+        s = s + A[i] * B[i];
+    }
+}
+
+host main() {
+    for (i = 0; i < 16384; i += 1) {
+        A[i] = i % 7;
+        B[i] = i % 5 + 1;
+    }
+    s = 0;
+    call dotprod();
+    print s;
+}

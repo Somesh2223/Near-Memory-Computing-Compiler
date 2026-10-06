@@ -1,3 +1,5 @@
 build/
 nemoc
 *.o
+results/sim_*.txt
+__pycache__/

@@ -118,3 +118,11 @@ IDCONT  [A-Za-z_0-9]
 }
 
 %%
+
+/* reset the scan position before lexing another file (used by frontend.cpp and
+ * the unit tests, which parse many inputs in one process) */
+void lexer_reset(void)
+{
+	g_line = 1;
+	g_col  = 1;
+}
