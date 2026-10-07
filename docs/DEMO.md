@@ -122,8 +122,11 @@ cp benchmarks/saxpy.nmc /tmp/mine.nmc
 ./nemoc /tmp/mine.nmc --transformations  # ...and fission splits it so saxpy still offloads
 ```
 Other quick experiments: change matmul's size from 16 to 8 or 64 and watch the
-arithmetic intensity move; change `LAUNCH_OVERHEAD` in `src/config.h`, `make`, and
-re-run `--simulate` to see small kernels stop paying off.
+arithmetic intensity move. The size check: `./nemoc tests/tiny_size.nmc --explain tiny`
+(an elementwise loop of 256 elements: every check passes except "big enough to amortise
+the launch"), then `--simulate` shows NAIVE at 0.06x while NEMO_C stays on the host. Edit
+the array size and loop bound to 16384 and watch it flip to OFFLOAD. Changing
+`LAUNCH_OVERHEAD` in `src/config.h` (then `make`) moves that break-even point.
 
 ## 4. Questions to expect (and where the answer is)
 

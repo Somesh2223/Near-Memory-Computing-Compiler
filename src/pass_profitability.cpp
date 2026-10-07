@@ -17,6 +17,10 @@
  *            and  no reference exhibits significant self-temporal reuse
  *            and  the outermost loop is parallel (or a recognised reduction)
  *            and  the class is not IRREGULAR
+ *            and  the nest is big enough to amortise the launch:
+ *                 host_est = (bytes / CACHE_LINE) * HOST_DRAM_ACCESS + flops
+ *                          > LAUNCH_OVERHEAD + bytes * DMA_PER_BYTE
+ *                 (the right-hand side is what PIM pays even for no work)
  *
  * FLOPs   arithmetic operations per iteration times the trip counts of the
  *         loops around them (comparisons are not counted).
@@ -287,6 +291,8 @@ void profitability(IRProgram *p, NestAnalysis *na, const std::string &name, Deci
 	d->analysable = na->analysable;
 	d->why_not = na->why_not;
 	d->float_reduction = false;
+	d->host_est = 0;
+	d->pim_fixed = 0;
 	d->offload = false;
 
 	/* ---- FLOPs ----------------------------------------------------------- */
@@ -416,6 +422,23 @@ void profitability(IRProgram *p, NestAnalysis *na, const std::string &name, Deci
 	}
 	d->ai = d->bytes > 0 ? d->flops / d->bytes : 0.0;
 
+	/* size check: every distinct cache line is filled from DRAM once, every array
+	 * access costs a cache hit and every flop a host ALU cycle; PIM pays the launch
+	 * overhead and moves the same bytes by DMA no matter how little work there is.
+	 * A nest the host finishes before that fixed cost is paid can never win. */
+	double accesses = 0;
+	for (i = 0; i < na->refs.size(); i++) {
+		if (na->refs[i].is_scalar)
+			continue;
+		double t = 1;
+		for (j = 0; j < na->refs[i].loops.size(); j++)
+			t *= (double)loop_trips(na->refs[i].loops[j]);
+		accesses += t;
+	}
+	d->host_est = d->bytes / CACHE_LINE * HOST_DRAM_ACCESS + accesses * HOST_CACHE_HIT +
+	              d->flops * HOST_ALU;
+	d->pim_fixed = LAUNCH_OVERHEAD + d->bytes * DMA_PER_BYTE;
+
 	/* ---- reuse classification ------------------------------------------------ */
 	for (i = 0; i < d->groups.size(); i++) {
 		RefGroupCost &g = d->groups[i];
@@ -495,6 +518,12 @@ void profitability(IRProgram *p, NestAnalysis *na, const std::string &name, Deci
 			d->fails.push_back("self-temporal reuse on " + join_names(d->temporal_sig));
 		if (d->float_reduction)
 			d->fails.push_back("float reduction would be reassociated (not bit-identical)");
+		if (d->host_est <= d->pim_fixed) {
+			char b[128];
+			snprintf(b, sizeof b, "too small: host ~%.0f cycles <= PIM launch+DMA %.0f cycles",
+			         d->host_est, d->pim_fixed);
+			d->fails.push_back(b);
+		}
 	}
 	d->offload = d->fails.empty();
 
@@ -522,6 +551,8 @@ void profitability(IRProgram *p, NestAnalysis *na, const std::string &name, Deci
 			r += "; NOT parallel(dir=[" + d->par_dirs + "])";
 		if (d->float_reduction)
 			r += "; float reduction";
+		if (d->host_est <= d->pim_fixed && d->fails.size() == 1)
+			r += "; too small to amortise launch overhead";
 	}
 	r += std::string("; class=") + class_text(d->pclass);
 	d->reason = r;
@@ -627,6 +658,9 @@ void explain_decision(IRProgram *p, NestAnalysis *na, const Decision *d)
 	printf("   [%s] class is not IRREGULAR\n", d->pclass != PC_IRREGULAR ? "pass" : "FAIL");
 	if (d->float_reduction)
 		printf("   [FAIL] float reduction would be reassociated (results would not be bit-identical)\n");
+	printf("   [%s] big enough to amortise the launch: host ~%.0f cycles %s PIM launch+DMA %.0f cycles\n",
+	       d->host_est > d->pim_fixed ? "pass" : "FAIL", d->host_est,
+	       d->host_est > d->pim_fixed ? ">" : "<=", d->pim_fixed);
 	bool part_fail = false;
 	for (i = 0; i < d->fails.size(); i++)
 		if (d->fails[i].compare(0, 22, "partitioning impossible") == 0) {
