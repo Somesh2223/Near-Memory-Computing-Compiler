@@ -122,7 +122,14 @@ OFFLOAD  iff  arithmetic intensity < MACHINE_BALANCE (0.5 flop/byte)
          and  the outermost loop is parallel by direction-vector analysis (or a recognised reduction)
          and  the class is not IRREGULAR
          and  the nest can be partitioned across DPUs (no all-to-all shuffle)
+         and  the nest is big enough to amortise the launch:
+              est. host cycles  >  LAUNCH_OVERHEAD + bytes * DMA_PER_BYTE
 ```
+
+The last clause is the size check: the estimate is `lines * HOST_DRAM_ACCESS +
+accesses * HOST_CACHE_HIT + flops`, and the right-hand side is what PIM pays even for no
+work. A perfectly offloadable 256-element loop (`tests/tiny_size.nmc`) is therefore kept
+on the host; the same loop at 16384 elements (saxpy) is offloaded.
 
 Classes: ELEMENTWISE, REDUCTION, STENCIL, COMPUTE_BOUND, IRREGULAR -- decided from
 direction vectors and access matrices, never from syntax.
@@ -154,7 +161,7 @@ direction vectors and access matrices, never from syntax.
 ```
 src/          the compiler (see the tables above)
 benchmarks/   the 15 programs: 14 from the brief + colmajor (loop interchange)
-tests/        unit-test programs, demo inputs (bad_*.nmc, dep_banerjee.nmc, coherence_demo.nmc)
+tests/        unit-test programs, demo inputs (bad_*.nmc, dep_banerjee.nmc, coherence_demo.nmc, tiny_size.nmc)
 results/      results.csv, decisions.md, transformations.md, cycles/bytes/energy.png
 docs/         coherence_analysis.md, simulator_model.md, graphs/ (Graphviz .dot files)
 scripts/      run_all.sh  (make run-all)

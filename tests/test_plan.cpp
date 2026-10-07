@@ -61,6 +61,18 @@ int main(void)
 	pp = plan_of("benchmarks/vecadd.nmc", true);
 	CHECK(only_nest(pp)->dec.ai > 0.08 && only_nest(pp)->dec.ai < 0.09);
 
+	/* size check: an elementwise nest with AI far below the balance is still kept on
+	 * the host when it is too small to pay for the launch; the same shape at
+	 * 16384 elements (saxpy) is offloaded */
+	pp = plan_of("tests/tiny_size.nmc", true);
+	CHECK(!only_nest(pp)->offload);
+	CHECK(only_nest(pp)->dec.ai < 0.5);
+	CHECK(only_nest(pp)->dec.host_est <= only_nest(pp)->dec.pim_fixed);
+	CHECK_INT(only_nest(pp)->dec.pclass, PC_ELEMENTWISE);
+	pp = plan_of("benchmarks/saxpy.nmc", true);
+	CHECK(only_nest(pp)->offload);
+	CHECK(only_nest(pp)->dec.host_est > only_nest(pp)->dec.pim_fixed);
+
 	/* transpose: profitable on paper, but partitioning needs an all-to-all shuffle */
 	pp = plan_of("benchmarks/transpose.nmc", true);
 	CHECK(!only_nest(pp)->offload);

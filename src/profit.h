@@ -40,6 +40,9 @@ struct Decision {
 	double       flops;
 	double       bytes;
 	double       ai;              /* arithmetic intensity, flops per byte       */
+	double       host_est;        /* estimated host cycles: line fills + flops  */
+	double       pim_fixed;       /* PIM cost that exists even for no work:
+	                               * launch + moving the bytes over the bus     */
 	std::vector<RefGroupCost> groups;
 	std::vector<std::string>  temporal;        /* any self-temporal reuse       */
 	std::vector<std::string>  temporal_sig;    /* ... that actually matters     */
