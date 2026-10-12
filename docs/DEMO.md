@@ -16,7 +16,7 @@ Optional, only to *draw* the Graphviz files: `sudo apt install graphviz`.
 ## 1. Is everything working? (a 10-minute self-test)
 
 ```bash
-make test       # 8 test programs, 359 checks; ends with  ALL TEST PROGRAMS PASSED
+make test       # 8 test programs, 365 checks; ends with  ALL TEST PROGRAMS PASSED
 make run-all    # simulates all 15 benchmarks; ends with  run-all complete ... verified
 ```
 
