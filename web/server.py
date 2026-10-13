@@ -285,7 +285,13 @@ def main():
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--host", default="127.0.0.1")
     a = ap.parse_args()
-    httpd = ThreadingHTTPServer((a.host, a.port), Handler)
+    try:
+        httpd = ThreadingHTTPServer((a.host, a.port), Handler)
+    except OSError as e:
+        print("cannot start on port %d: %s" % (a.port, e.strerror))
+        print("Another copy is probably still running: open http://localhost:%d, or stop it with"
+              " Ctrl+C in its terminal, or use another port:  python3 web/server.py --port 8081" % a.port)
+        sys.exit(1)
     print("NEMO-C web frontend: open  http://localhost:%d  (Ctrl+C to stop)" % a.port, flush=True)
     if not os.path.exists(NEMOC):
         print("note: ./nemoc is not built yet; the page has a Build button", flush=True)
