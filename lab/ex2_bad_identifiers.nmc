@@ -1,0 +1,7 @@
+// Lab Ex 2 SET 2 (invalid identifiers).   Run:  --dump tokens   then  --check
+// value@  : '@' is not a character of the language -> lexical error with line:column
+// 2marks  : the lexer reads the number 2, then the identifier marks (maximal munch),
+//           so the parser sees "int 2 marks" and reports a syntax error
+scalar int count;
+scalar int value@;
+scalar int 2marks;

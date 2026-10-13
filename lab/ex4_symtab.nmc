@@ -1,0 +1,25 @@
+// Lab Ex 4 (symbol table) on our semantic pass.   Run:  --check
+//   SET 2  redeclaration      : 'a' is declared twice -> error, the duplicate is not inserted
+//   SET 3  undeclared lookup  : 'c' is used but never declared -> error
+//   SET 5  scopes             : a loop index lives only inside its loop.  The two sibling
+//                               loops may both declare i; using i after the loop is an error.
+// All errors are reported in one run, each with line:column.
+array float A[16];
+scalar int a;
+scalar float b;
+scalar int a;
+
+kernel k() {
+    for (i = 0; i < 16; i += 1) {
+        A[i] = b + c;
+    }
+    for (i = 0; i < 16; i += 1) {
+        A[i] = A[i] * 2.0;
+    }
+}
+
+host main() {
+    b = 1.5;
+    call k();
+    a = i;
+}

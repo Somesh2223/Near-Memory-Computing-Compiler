@@ -1,0 +1,31 @@
+// Lab Ex 5 (three-address code).   Run:  --dump ir   and   --emit-dot cfg
+//   5a: the if-else becomes a test plus two branches; the CFG shows the jumps
+//       (if.then / if.else / if.merge blocks) that the lab writes as "goto".
+//   5b: a = b * -c + b * -c becomes one operation per line with temporaries %tN.
+//       Run  --dump cse  to see the repeated  b * -c  computed only once.
+// NEMO-C has no 'return', so the if-else stores its answer in r.
+scalar int X;
+scalar int Y;
+scalar int r;
+scalar int a;
+scalar int b;
+scalar int c;
+
+kernel expr() {
+    a = b * -c + b * -c;
+}
+
+host main() {
+    X = 1;
+    Y = 2;
+    if (X > Y) {
+        r = 1;
+    } else {
+        r = 0;
+    }
+    b = 3;
+    c = 4;
+    call expr();
+    print a;
+    print r;
+}

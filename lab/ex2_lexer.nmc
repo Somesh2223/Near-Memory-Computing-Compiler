@@ -1,0 +1,35 @@
+// Lab Ex 2 (lexical analysis) on our own lexer.   Run:  --dump tokens
+//   keywords      array scalar int float kernel host for if else call print
+//   identifiers   count  _total  student1  (letter or _ first, then letters/digits/_)
+//   literals      100  7  0.5  2.5        (INT_LIT and FLOAT_LIT)
+//   operators     <= >= == != += are ONE token each: the longest-match rule
+//   delimiters    ( ) { } [ ] ; ,
+/* Comments like this one, and the // ones, are removed by the lexer:
+   they never reach the parser (the comment-removal exercise). */
+array float marks[64];
+scalar int count;
+scalar float _total;
+scalar int student1;
+
+kernel average() {
+    for (i = 0; i <= 63; i += 1) {
+        _total = _total + marks[i] * 0.5;
+    }
+}
+
+host main() {
+    count = 100;
+    student1 = count % 7;
+    call average();
+    if (count >= 10) {
+        print _total;
+    } else {
+        print count;
+    }
+    if (student1 != 3) {
+        print student1;
+    }
+    if (count == 100) {
+        _total = 2.5;
+    }
+}

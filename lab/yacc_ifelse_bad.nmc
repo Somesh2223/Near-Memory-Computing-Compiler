@@ -1,0 +1,18 @@
+// YACC exercise 3 (if-else syntax), INVALID forms.   Run:  --dump ast
+// Lines 13 to 16 are each reported with line:column, and the parser keeps going
+// after every error (panic-mode recovery: the rule  stmt : error ';'  skips to the
+// next ';').  Lines 12 and 17 are valid.
+scalar int x;
+scalar int y;
+
+host main() {
+    x = 5;
+    y = 3;
+    // valid, then four broken if-else statements
+    if (x > y) { print x; } else { print y; }
+    if x > y print x;
+    if (x > y) print x;
+    if (x > ) print y;
+    else print y;
+    print x;
+}

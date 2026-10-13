@@ -1,0 +1,44 @@
+// Lab Ex 6 (code optimisation), the same inputs as the lab sheet.
+//   6a(i)  constant propagation:  --dump constfold   (c = 30, d = 10, e = 300)
+//   6a(ii) common subexpressions: --dump cse         (s = p + q reuses t = p + q)
+//          dead code:             --dump dce         (z = 10 is overwritten before any use)
+// p and q are set by the host, so inside the kernel they are not constants.
+scalar int a;
+scalar int b;
+scalar int c;
+scalar int d;
+scalar int e;
+scalar int p;
+scalar int q;
+scalar int t;
+scalar int s;
+scalar int f;
+scalar int r;
+scalar int z;
+
+kernel constprop() {
+    a = 20;
+    b = 10;
+    c = a + 10;
+    d = 20 - b;
+    e = c * d;
+}
+
+kernel cse_dce() {
+    z = 10;
+    t = p + q;
+    s = p + q;
+    f = t + s;
+    r = f;
+    z = r;
+}
+
+host main() {
+    p = 3;
+    q = 4;
+    call constprop();
+    call cse_dce();
+    print e;
+    print r;
+    print z;
+}
