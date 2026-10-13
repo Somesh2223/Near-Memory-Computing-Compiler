@@ -107,15 +107,26 @@ def dot_to_svg(text):
         return None
 
 
-def generated_files(since):
-    """Files a nemoc run produced: Graphviz graphs, DPU programs, host C."""
+OUTPUT_PATTERNS = [(os.path.join(DOTDIR, "*.dot"), "dot"),
+                   (os.path.join(ROOT, "build", "*_dpu.pim"), "pim"),
+                   (os.path.join(ROOT, "build", "*_host.c"), "c")]
+
+
+def output_snapshot():
+    """Modification time of every output file before a run, so the run's own files can be told apart."""
+    snap = {}
+    for pattern, kind in OUTPUT_PATTERNS:
+        for p in glob.glob(pattern):
+            snap[p] = os.stat(p).st_mtime_ns
+    return snap
+
+
+def generated_files(before):
+    """Files a nemoc run produced (new or rewritten since the snapshot): graphs, DPU programs, host C."""
     found = []
-    patterns = [(os.path.join(DOTDIR, "*.dot"), "dot"),
-                (os.path.join(ROOT, "build", "*_dpu.pim"), "pim"),
-                (os.path.join(ROOT, "build", "*_host.c"), "c")]
-    for pattern, kind in patterns:
+    for pattern, kind in OUTPUT_PATTERNS:
         for p in sorted(glob.glob(pattern)):
-            if os.path.getmtime(p) >= since:
+            if before.get(p) != os.stat(p).st_mtime_ns:
                 text = read_text(p)
                 entry = {"name": os.path.relpath(p, ROOT).replace(os.sep, "/"), "kind": kind, "text": text}
                 if kind == "dot":
@@ -167,14 +178,14 @@ def run_nemoc(req):
 
     cmd = ["./nemoc", rel] + args
     with LOCK:
-        start = time.time() - 1.0
+        before = output_snapshot()
         t0 = time.time()
         try:
             r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=RUN_TIMEOUT)
             code, out, err = r.returncode, r.stdout, r.stderr
         except subprocess.TimeoutExpired:
             code, out, err = -1, "", "nemoc: stopped after %d seconds" % RUN_TIMEOUT
-        files = generated_files(start)
+        files = generated_files(before)
         ms = int((time.time() - t0) * 1000)
     return 200, {"cmd": " ".join(cmd), "exit": code, "stdout": out, "stderr": err,
                  "files": files, "ms": ms, "source_path": rel}
