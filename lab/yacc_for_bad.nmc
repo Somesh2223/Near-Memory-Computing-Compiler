@@ -1,0 +1,18 @@
+// YACC exercise 4 (for-loop syntax), INVALID forms.   Run:  --dump ast
+// Lines 11 to 13 are each reported with line:column; the parser recovers after
+// each one (panic mode: skip to the next ';').  Line 10 is valid.
+//   line 11: the increment part is missing
+//   line 12: the step must be written  i += 1
+//   line 13: the body must be in braces
+array float A[64];
+
+kernel loops() {
+    for (i = 0; i < 64; i += 1) { A[i] = 0.0; }
+    for (i = 0; i < 64) A[i] = 1.0;
+    for (i = 0; i < 64; i = i + 1) A[i] = 2.0;
+    for (i = 0; i < 64; i += 1) A[i] = 3.0;
+}
+
+host main() {
+    call loops();
+}

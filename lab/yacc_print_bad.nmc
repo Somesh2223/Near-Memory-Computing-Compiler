@@ -1,0 +1,16 @@
+// YACC exercise 1 (printf syntax) on our print statement.   Run:  --dump ast
+//   printstmt : PRINT lvalue ';'      (a variable or an array element, like printf("%d", x))
+// Lines 10 and 11 are valid.  Lines 12 to 15 are syntax errors, each reported with
+// line:column, and the parser keeps going after each one.
+array int A[4];
+scalar int x;
+
+host main() {
+    x = 42;
+    print x;
+    print A[2];
+    print x + 1;
+    print ;
+    print (x;
+    print x x;
+}

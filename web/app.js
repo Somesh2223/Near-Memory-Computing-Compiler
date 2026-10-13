@@ -138,7 +138,7 @@ async function loadFileList() {
   state.files = r.files;
   const sel = $('file');
   sel.innerHTML = '';
-  [['benchmarks/', 'Benchmarks'], ['tests/', 'Demo inputs']].forEach(([prefix, label]) => {
+  [['benchmarks/', 'Benchmarks'], ['tests/', 'Demo inputs'], ['lab/', 'Lab exercises']].forEach(([prefix, label]) => {
     const g = document.createElement('optgroup');
     g.label = label;
     r.files.filter(f => f.startsWith(prefix)).forEach(f => {

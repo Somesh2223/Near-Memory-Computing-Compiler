@@ -7,7 +7,7 @@
 #
 #   GET  /                     the single-page frontend (web/index.html)
 #   GET  /api/status           is ./nemoc built? is Graphviz installed?
-#   GET  /api/files            the example programs (benchmarks/, tests/)
+#   GET  /api/files            the example programs (benchmarks/, tests/, lab/)
 #   GET  /api/file?path=...    one example program's source
 #   POST /api/run              write the editor's source to build/web/<name>.nmc,
 #                              run  ./nemoc <file> <flags for one operation>,
@@ -85,7 +85,7 @@ NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_#]{0,63}$")
 def example_files():
     """Relative paths of every example program the frontend may open."""
     out = []
-    for d in ("benchmarks", "tests"):
+    for d in ("benchmarks", "tests", "lab"):
         for p in sorted(glob.glob(os.path.join(ROOT, d, "*.nmc"))):
             out.append(d + "/" + os.path.basename(p))
     return out

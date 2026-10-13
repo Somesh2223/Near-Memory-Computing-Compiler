@@ -1,0 +1,31 @@
+// YACC exercise 3 (if-else syntax), VALID forms.   Run:  --check   or   --dump ast
+// Our bison grammar (src/parser.y):
+//   ifstmt : IF '(' expr ')' '{' stmt_list '}'
+//          | IF '(' expr ')' '{' stmt_list '}' ELSE '{' stmt_list '}'
+// Braces are mandatory, which is why the grammar has no dangling-else conflict.
+scalar int x;
+scalar int y;
+scalar int z;
+
+host main() {
+    x = 5;
+    y = 3;
+    if (x > y) {
+        print x;
+    }
+    if (x == y) {
+        z = 0;
+    } else {
+        z = 1;
+    }
+    if (x >= 0) {
+        if (y != 0) {
+            z = x / y;
+        } else {
+            z = x;
+        }
+    } else {
+        z = y;
+    }
+    print z;
+}
