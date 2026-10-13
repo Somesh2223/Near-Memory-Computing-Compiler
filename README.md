@@ -70,6 +70,25 @@ make clean
 A good first five minutes: `--decisions` on `benchmarks/matmul.nmc` and
 `benchmarks/saxpy.nmc`, then `--explain matmul`, then `--simulate` on the same two.
 
+### The web frontend
+
+```bash
+make web          # then open http://localhost:8080 in a browser
+```
+
+Every operation above is also a button in the browser. The page has an editor (load
+any benchmark or demo input, or type your own program), the nine phases A to I with
+their operations, and the compiler's output. Errors are clickable and jump to the line.
+CFG, dependence and interference graphs are drawn, and the generated `.pim` and host C
+files open in tabs. A **Results** view shows every benchmark's speedup, the
+verification status and every offload decision, with buttons for `make run-all` and
+`make test`.
+
+The page never re-implements the compiler. `web/server.py` (Python standard library
+only, like `plot.py`) writes the editor's text to `build/web/<name>.nmc`, runs the real
+`./nemoc` with a fixed argument list for the chosen operation, and returns what it
+printed. Drawing graphs uses viz.js from a CDN, or Graphviz if it is installed.
+
 ## What each pass does and which classical algorithm it is
 
 Every source file opens with a comment naming the concept and the algorithm.
@@ -165,6 +184,7 @@ tests/        unit-test programs, demo inputs (bad_*.nmc, dep_banerjee.nmc, cohe
 results/      results.csv, decisions.md, transformations.md, cycles/bytes/energy.png
 docs/         coherence_analysis.md, simulator_model.md, graphs/ (Graphviz .dot files)
 scripts/      run_all.sh  (make run-all)
+web/          the browser frontend: server.py, index.html, app.js, style.css  (make web)
 plot.py       renders the CSV with matplotlib; independent of the compiler
 ```
 
