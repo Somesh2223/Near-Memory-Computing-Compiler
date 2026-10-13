@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEMO-C Workbench</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">NEMO-C</span>
+    <span class="tagline">near-memory-aware compiler</span>
+  </div>
+  <nav class="views" role="tablist">
+    <button class="view-tab active" data-view="compiler" role="tab">Compiler</button>
+    <button class="view-tab" data-view="results" role="tab">Results</button>
+  </nav>
+  <div class="status">
+    <span id="build-pill" class="pill">checking&hellip;</span>
+    <button id="build-btn" class="btn small">Build</button>
+  </div>
+</header>
+
+<main id="view-compiler" class="workspace">
+  <section class="pane editor-pane">
+    <div class="pane-head">
+      <label class="sr" for="file">Program</label>
+      <select id="file"></select>
+      <span id="dirty" class="dirty" hidden>edited</span>
+      <button id="reset-btn" class="btn ghost small" title="Discard edits and reload the file">Reset</button>
+    </div>
+    <div class="editor">
+      <div id="gutter" class="gutter" aria-hidden="true"></div>
+      <textarea id="src" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" aria-label="NEMO-C source"></textarea>
+    </div>
+    <div class="options">
+      <label><input type="checkbox" id="opt-noopt"> skip optimisations</label>
+      <label>distribution
+        <select id="opt-dist">
+          <option value="">chosen by cost</option>
+          <option value="block">block</option>
+          <option value="cyclic">cyclic</option>
+          <option value="bcyclic">block-cyclic</option>
+        </select>
+      </label>
+      <label>registers <input type="number" id="opt-regs" min="3" max="64" placeholder="24"></label>
+    </div>
+  </section>
+
+  <section class="pane run-pane">
+    <nav id="phases" class="phases" aria-label="Compiler phases"></nav>
+    <div class="phase-info">
+      <h2 id="phase-title"></h2>
+      <p id="phase-blurb"></p>
+      <div id="ops" class="ops"></div>
+    </div>
+    <div class="cmdline">
+      <code id="cmd">Pick a program, then an operation. Ctrl+Enter re-runs the last one.</code>
+      <span id="meta" class="meta"></span>
+    </div>
+    <div id="out-tabs" class="out-tabs" hidden></div>
+    <div id="out-wrap" class="out-wrap">
+      <pre id="out" class="output"></pre>
+      <div id="graph" class="graph" hidden></div>
+    </div>
+  </section>
+</main>
+
+<main id="view-results" class="results" hidden>
+  <div class="results-head">
+    <div>
+      <h2>Benchmark results</h2>
+      <p class="muted">From <code>results/results.csv</code>: total simulated cycles, every configuration checked bit-identical.</p>
+    </div>
+    <div class="results-actions">
+      <button id="runall-btn" class="btn">Run all benchmarks</button>
+      <button id="test-btn" class="btn ghost">Run unit tests</button>
+    </div>
+  </div>
+  <div id="cards" class="cards"></div>
+  <div class="card-block">
+    <div id="speedup-chart" class="chart"></div>
+  </div>
+  <div class="card-block">
+    <h3>Every benchmark</h3>
+    <div class="table-wrap"><table id="bench-table"></table></div>
+  </div>
+  <div class="card-block">
+    <h3>Every offload decision</h3>
+    <div class="table-wrap"><table id="dec-table"></table></div>
+  </div>
+  <div class="card-block" id="png-block" hidden>
+    <h3>Charts from plot.py</h3>
+    <div id="pngs" class="pngs"></div>
+  </div>
+  <div class="card-block" id="make-block" hidden>
+    <h3 id="make-title">make</h3>
+    <pre id="make-out" class="output tall"></pre>
+  </div>
+</main>
+
+<div id="busy" class="busy" hidden><span class="spinner"></span><span id="busy-text">Running&hellip;</span></div>
+<script src="/app.js"></script>
+</body>
+</html>

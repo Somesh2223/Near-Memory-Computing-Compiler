@@ -5,6 +5,7 @@
 #   make demo       front-end + IR + CFG demo on the saxpy example
 #   make test       build and run the unit-test programs in tests/
 #   make run-all    compile + simulate every benchmark, write results/
+#   make web        the browser frontend at http://localhost:8080 (web/server.py)
 #   make clean
 #
 # Generated scanner/parser and all object files live in build/; hand-written
@@ -30,7 +31,7 @@ MAIN_OBJ := $(BUILD)/main.o
 TEST_SRC := $(wildcard tests/test_*.cpp)
 TEST_BIN := $(patsubst tests/%.cpp,$(BUILD)/%,$(TEST_SRC))
 
-.PHONY: all clean demo test run-all
+.PHONY: all clean demo test run-all web
 all: $(BIN)
 
 $(BIN): $(LIB_OBJ) $(MAIN_OBJ)
@@ -109,6 +110,10 @@ demo: $(BIN) $(BUILD)/dot
 # ---- full evaluation (defined once the simulator exists) -------------------
 run-all: $(BIN) $(BUILD)/dot
 	bash scripts/run_all.sh
+
+# ---- web frontend: drives ./nemoc from a browser (Python standard library) ----
+web: $(BIN) $(BUILD)/dot
+	python3 web/server.py
 
 clean:
 	rm -rf $(BUILD) $(BIN)

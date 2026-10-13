@@ -31,6 +31,20 @@ Quick sanity check, 5 seconds:
 ./nemoc benchmarks/saxpy.nmc  --decisions     # must say OFFLOAD
 ```
 
+## 1b. The web frontend (the easiest way to demo)
+
+```bash
+make web          # leave this running; open http://localhost:8080 in your Windows browser
+```
+
+The browser on Windows reaches the server inside WSL directly. Pick a program in the
+top-left, pick a phase (A to I), and press an operation. Each button runs the same
+`./nemoc` command shown in the grey bar above the output, so you can say "this is the
+real compiler, here is the exact command". The **Good examples** links under each phase
+load the right demo file. The **Results** tab is the benchmark dashboard.
+Ctrl+Enter re-runs the last operation after you edit the program. Stop the server
+with Ctrl+C.
+
 ## 2. The demo script (about 15 minutes)
 
 Copy-paste each block; the comment says what to point at.
