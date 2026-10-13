@@ -48,6 +48,8 @@ const PHASES = [
 ];
 
 const GRAPH_OPS = { cfg: 1, depsdot: 1, interference: 1 };
+/* single-pass optimisation dumps: shown with the lines each pass changed highlighted */
+const PASS_OPS = { constfold: 1, cse: 1, dce: 1, indvar: 1, strength: 1 };
 const LINE_PX = 20;   /* editor line height, matches style.css */
 
 const state = {
@@ -296,6 +298,7 @@ function showResult(op, r) {
   state.result = r;
   const text = (r.stdout || '') + (r.stderr ? (r.stdout ? '\n' : '') + r.stderr : '');
   r.text = text || '(no output)';
+  r.op = op;
 
   /* error positions -> gutter marks */
   state.errorLines = {};
@@ -335,7 +338,7 @@ function showTab(key) {
   if (key === 'out') {
     $('graph').hidden = true;
     $('out').hidden = false;
-    $('out').innerHTML = highlight(r.text, 'text');
+    $('out').innerHTML = (PASS_OPS[r.op] && r.exit === 0) ? passDiff(r.text) : highlight(r.text, 'text');
     $('out').scrollTop = 0;
     return;
   }
@@ -381,6 +384,46 @@ async function showGraph(f) {
       '). Drawing needs internet access, or Graphviz in WSL: <code>sudo apt install graphviz</code>. The Graphviz source:</p><pre>' +
       esc(f.text) + '</pre>';
   }
+}
+
+/* One optimisation pass prints "IR BEFORE", its analysis, then "IR AFTER".
+ * Compare the two IR listings line by line (longest common subsequence) and
+ * mark what the pass removed (red, in BEFORE) and what it added or changed
+ * (green, in AFTER).  Source positions @line:col are ignored when comparing. */
+function passDiff(text) {
+  const lines = text.split('\n');
+  const find = re => lines.findIndex(l => re.test(l));
+  const iB = find(/^==== \w+: IR BEFORE/), iA = find(/^==== \w+: analysis/), iF = find(/^==== \w+: IR AFTER/);
+  if (iB < 0 || iA < 0 || iF < 0) return highlight(text, 'text');
+
+  const key = l => l.replace(/@\d+:\d+\s*$/, '').replace(/\s+/g, ' ').trim();
+  const before = lines.slice(iB + 1, iA), after = lines.slice(iF + 1);
+  const n = before.length, m = after.length;
+  /* lcs[i][j] = length of the longest common subsequence of before[i..] and after[j..] */
+  const lcs = [];
+  for (let i = 0; i <= n; i++) lcs.push(new Array(m + 1).fill(0));
+  for (let i = n - 1; i >= 0; i--)
+    for (let j = m - 1; j >= 0; j--)
+      lcs[i][j] = key(before[i]) === key(after[j]) ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+  const removed = new Array(n).fill(false), added = new Array(m).fill(false);
+  let i = 0, j = 0;
+  while (i < n && j < m) {
+    if (key(before[i]) === key(after[j])) { i++; j++; }
+    else if (lcs[i + 1][j] >= lcs[i][j + 1]) removed[i++] = true;
+    else added[j++] = true;
+  }
+  while (i < n) removed[i++] = true;
+  while (j < m) added[j++] = true;
+
+  const row = (l, cls) => '<span class="ln' + (cls ? ' ' + cls : '') + '">' + (highlight(l, 'text') || '​') + '</span>';
+  const out = [];
+  out.push(row('Highlighted: red = removed by this pass, green = added or changed by it.', 't-dim'));
+  for (let k = 0; k < lines.length; k++) {
+    if (k > iB && k < iA) out.push(row(lines[k], removed[k - iB - 1] && lines[k].trim() ? 'd-del' : ''));
+    else if (k > iF) out.push(row(lines[k], added[k - iF - 1] && lines[k].trim() ? 'd-add' : ''));
+    else out.push(row(lines[k], ''));
+  }
+  return out.join('');
 }
 
 /* syntax colouring of compiler output, DPU assembly and C */

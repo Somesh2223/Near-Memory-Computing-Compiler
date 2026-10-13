@@ -313,6 +313,10 @@ a.try { color: var(--accent); }
 .b-ok { color: var(--ok); background: var(--ok-soft); }
 .b-bad { color: var(--bad); background: var(--bad-soft); }
 a.loc { color: var(--bad); text-decoration: underline dotted; cursor: pointer; }
+/* optimisation diff: one block per line so the background spans the full width */
+.ln { display: block; width: max-content; min-width: 100%; }
+.d-add { background: var(--ok-soft); box-shadow: inset 3px 0 0 var(--ok); }
+.d-del { background: var(--bad-soft); box-shadow: inset 3px 0 0 var(--bad); text-decoration: line-through; text-decoration-color: var(--bad); }
 
 /* ---- results ----------------------------------------------------------------- */
 .results { flex: 1; overflow: auto; padding: 20px 24px 40px; }
