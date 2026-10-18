@@ -7,3 +7,6 @@ __pycache__/
 # Overleaf upload bundle (rebuilt from paper/)
 paper/*.zip
 paper/figures/preview/
+
+# Local Claude Code settings
+.claude/
