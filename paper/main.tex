@@ -34,8 +34,7 @@
 }
 
 \begin{document}
-\history{Date of publication xxxx 00, 0000, date of current version xxxx 00, 0000.}
-\doi{10.1109/ACCESS.2024.0429000}
+\history{Manuscript submitted for BCSE307P Compiler Design, Vellore Institute of Technology, October 2026.}
 
 \title{NEMO-C: Teaching a Compiler When \emph{Not} to Offload to Processing-in-Memory}
 
@@ -51,7 +50,7 @@
 {Tripathi \headeretal: NEMO-C: Teaching a Compiler When Not to Offload to Processing-in-Memory}
 {Tripathi \headeretal: NEMO-C: Teaching a Compiler When Not to Offload to Processing-in-Memory}
 
-\corresp{Corresponding author: Somesh Tripathi (e-mail: somesht510@gmail.com).}
+\corresp{Corresponding author: Somesh Tripathi (e-mail: somesh.tripathi2024@vitstudent.ac.in).}
 
 \begin{abstract}
 Processing-in-memory (PIM) places small processors inside DRAM so that data-intensive code can run where its data already lives, and commercial PIM devices are now available. Their programmers, however, must decide by hand which loops to move to the memory-side processors, and a wrong choice can make a program slower than running it on the CPU alone. Current PIM software stacks either leave this choice to the programmer through libraries and data-parallel interfaces, or make it inside domain-specific compilers for neural networks and in-DRAM bit-serial operations. None of them gives a general loop compiler a static, explainable rule that refuses an offload when the cost of moving data, launching the device and losing cache reuse outweighs the gain. We present NEMO-C, a compiler built from scratch in C++17 with Flex and Bison, that decides for every loop nest whether it should run on the host or on 64 DPUs. Its rule combines arithmetic intensity, data reuse, dependence-based parallelism, partitionability and a launch-cost size check, and loop fission, interchange and fusion turn some rejected loops into profitable ones. On 15 benchmarks in a cycle-level simulator, NEMO-C is never slower than the host, reaches a geometric-mean speedup of 1.42$\times$ (up to 7.47$\times$), and avoids the 0.63$\times$, 0.70$\times$ and 0.43$\times$ slowdowns that blind offloading causes; all 45 runs are bit-identical. Future work will calibrate the cost model on real UPMEM hardware and extend it to irregular and multi-kernel programs.
