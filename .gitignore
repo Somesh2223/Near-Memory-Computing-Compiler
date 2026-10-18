@@ -3,3 +3,7 @@ nemoc
 *.o
 results/sim_*.txt
 __pycache__/
+
+# Overleaf upload bundle (rebuilt from paper/)
+paper/*.zip
+paper/figures/preview/

@@ -633,18 +633,27 @@ function wire() {
 
 async function init() {
   wire();
-  const p = recall('phase');
+  /* a link can open a program and run one operation: ?file=benchmarks/matmul.nmc&phase=E&op=explain&arg=matmul */
+  const q = new URLSearchParams(location.search);
+  const p = q.get('phase') || recall('phase');
   if (PHASES.some(x => x.id === p)) state.phase = p;
   refreshStatus();
   try {
-    const first = await loadFileList();
+    let first = await loadFileList();
+    if (state.files.includes(q.get('file'))) first = q.get('file');
     renderPhases();
     await openFile(first, false);
   } catch (e) {
     renderPhases();
     clearOutput(e.message);
   }
-  if (recall('view') === 'results') showView('results');
+  const op = q.get('op');
+  if (op && PHASES.some(x => x.ops.some(o => o[0] === op))) {
+    if (q.get('arg')) state.kernel = q.get('arg');
+    runOp(op);
+  } else if (q.get('view') === 'results' || (!q.toString() && recall('view') === 'results')) {
+    showView('results');
+  }
 }
 
 init();
